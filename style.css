@@ -152,3 +152,11 @@ h2 { margin: 0 0 12px; color: var(--iron); font-size: 22px; }
 #fireBar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff6a1a, #ffc933); transition: width .1s; }
 /* brillo en los bordes de la pantalla: mas fuerte cuanto mas FUEGO */
 #fireGlow { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity .3s, box-shadow .3s; }
+
+/* ---------- NUEVO: opciones, clave del mod menu, paneles ---------- */
+.panel { width: min(92vw, 520px); max-height: 62vh; overflow-y: auto; padding: 10px 14px; margin: 8px 0 14px; background: rgba(13,9,8,.6); border: 2px solid var(--bone); box-shadow: 4px 4px 0 #000; text-align: left; -webkit-overflow-scrolling: touch; }
+.keyin { width: min(70vw, 260px); padding: 12px; margin: 10px 0 4px; font: bold 22px "Courier New", monospace; letter-spacing: 6px; text-align: center; color: var(--iron); background: var(--coal); border: 3px solid var(--bone); outline: none; box-shadow: 3px 3px 0 #000; }
+.keyin:focus { border-color: var(--furnace); }
+.sub.err { min-height: 18px; color: var(--blood); font-weight: bold; margin: 2px 0 10px; }
+.keyin.shake { animation: keyShake .35s; border-color: var(--blood); }
+@keyframes keyShake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-9px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }

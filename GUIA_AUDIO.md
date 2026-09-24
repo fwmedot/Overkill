@@ -52,15 +52,17 @@ Solo necesitas GitHub y tus archivos de audio.
 
 ---
 
-## 🎵 MÚSICA — 3 canciones que cambian solas
+## 🎵 MÚSICA — 5 canciones que cambian solas
 
-La música **reacciona a lo que pasa**. Se mezcla suavemente (unos 1,5 segundos) entre estas 3 capas:
+La música **reacciona a lo que pasa**. Se mezcla suavemente (unos 1,5 segundos) entre estas capas:
 
 | Archivo | Carpeta | Cuándo suena |
 |---|---|---|
+| `musica-menu.mp3` | `audio/music/` | **Menú principal**, opciones y pantalla de muerte |
 | `musica-calma.mp3` | `audio/music/` | Al empezar la partida y **entre oleadas** (poca acción) |
 | `musica-batalla.mp3` | `audio/music/` | **Durante el combate** normal |
-| `musica-jefe.mp3` | `audio/music/` | Cuando hay un **jefe** en pantalla (oleadas 5, 10, 15…) |
+| `musica-jefe.mp3` | `audio/music/` | Cuando hay un **jefe** en pantalla (oleadas 5, 10, 15, 20, 25…) |
+| `musica-versus.mp3` | `audio/music/` | **Modo Versus**. Si no existe, suena `musica-batalla.mp3` |
 
 **Detalles útiles:**
 - La música vuelve a *calma* solo tras unos **4 segundos sin combate**, para que no cambie de golpe entre oleadas seguidas.
@@ -97,7 +99,7 @@ Para añadir otra oleada (por ejemplo la 20), copia una línea, cambia el númer
 
 ---
 
-## 🔊 EFECTOS DE SONIDO — LISTA COMPLETA (24)
+## 🔊 EFECTOS DE SONIDO — LISTA COMPLETA (25)
 
 Cada uno con su nombre exacto, carpeta y cuándo suena.
 
@@ -133,6 +135,14 @@ Cada uno con su nombre exacto, carpeta y cuándo suena.
 | `gancho-lanzar.mp3` | **Lanzas** el gancho. | jugador y entorno |
 | `gancho-clavar.mp3` | El gancho **se clava** en algo. | jugador y entorno |
 | `parry.mp3` | Haces un **parry** (devuelves un proyectil). | jugador y entorno |
+
+### PASOS — carpeta `audio/sfx/steps/`
+
+| Nombre exacto | Cuándo suena | Volumen que lo controla |
+|---|---|---|
+| `pasos.mp3` | **Un solo paso** del jugador. Se repite solo al caminar o correr por el suelo. Suena **más seguido cuanto más rápido vas**. **No suena** en el aire, al deslizarte, en dash ni colgado del gancho. Debe ser **corto** (menos de 0.4 s) y **de un solo paso** (no una tanda de pasos). | jugador y entorno |
+
+> Para cambiar los pasos: sube tu sonido con el nombre `pasos.mp3` a `audio/sfx/steps/`. Nada más. No hay controles de pasos en Opciones: usa el volumen de **Jugador y entorno**.
 
 ### ENTORNO — carpeta `audio/sfx/environment/`
 

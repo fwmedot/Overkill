@@ -24,7 +24,7 @@
   <div id="fireBox"><div id="fireL"></div><div id="fireBar"><i id="fireFill"></i></div></div>
   <div id="fireGlow"></div>
   <div id="feed"></div>
-  <div id="bossBar"><div class="bn">EL CARCELERO</div><div class="bt"><div id="bossFill"></div></div></div>
+  <div id="bossBar"><div class="bn" id="bossName">EL CARCELERO</div><div class="bt"><div id="bossFill"></div></div></div>
   <div id="laserWarn"></div>
   <div id="weapon"></div>
   <div id="cross"></div>
@@ -54,8 +54,12 @@
 <div class="screen on" id="title">
   <h1>HELLRUSH</h1>
   <div class="sub">Arena shooter frenetico de movilidad extrema. Sangre = vida. La lava mata al instante.</div>
-  <div class="big" id="bStart">ENTRAR</div>
+  <div class="big" id="bStart">MODO INFINITO</div>
+  <div class="big" id="bVersus">MODO VERSUS</div>
+  <div class="big" id="bOnline">JUEGO ONLINE</div>
+  <div class="big alt" id="bOptions">OPCIONES</div>
   <div class="big alt" id="bModT">MOD MENU</div>
+  <div class="big alt" id="bExit">SALIR</div>
   <div class="sub" style="margin-top:18px">Izq: joystick &middot; Der: mirar<br>GANCHO: manten para colgarte y balancearte &middot; sueltalo para salir disparado<br>Doble toque SALTO: impulso &middot; SLIDE en aire: caida rapida con impacto<br><b>PARRY:</b> dispara a un proyectil enemigo cuando lo tengas encima y lo devuelves</div>
 </div>
 
@@ -71,6 +75,42 @@
   <div class="sub" id="deadInfo"></div>
   <div class="big" id="bRetry">REINTENTAR</div>
   <div class="big alt" id="bNew">NUEVO NIVEL</div>
+</div>
+
+<div class="screen" id="opts">
+  <h2>OPCIONES</h2>
+  <div class="panel">
+    <div class="row"><label>Efectos de sonido</label><input type="checkbox" id="oSound" checked></div>
+    <div class="row"><label>Musica</label><input type="checkbox" id="oMusic" checked></div>
+    <div class="row"><label>Volumen general</label><input type="range" id="oVol" min="0" max="1" step="0.05" value="0.7"><span class="val" id="oVolV">0.70</span></div>
+    <div class="row"><label>Volumen musica</label><input type="range" id="oVolMusic" min="0" max="1" step="0.05" value="0.6"><span class="val" id="oVolMusicV">0.60</span></div>
+    <div class="row"><label>Volumen armas</label><input type="range" id="oVolWeapons" min="0" max="1" step="0.05" value="1"><span class="val" id="oVolWeaponsV">1.00</span></div>
+    <div class="row"><label>Volumen enemigos</label><input type="range" id="oVolEnemies" min="0" max="1" step="0.05" value="1"><span class="val" id="oVolEnemiesV">1.00</span></div>
+    <div class="row"><label>Volumen jugador y entorno</label><input type="range" id="oVolPlayer" min="0" max="1" step="0.05" value="1"><span class="val" id="oVolPlayerV">1.00</span></div>
+    <div class="row"><label>Volumen interfaz</label><input type="range" id="oVolUi" min="0" max="1" step="0.05" value="1"><span class="val" id="oVolUiV">1.00</span></div>
+    <div class="sec">MUSICA</div>
+    <div class="row"><label>Pista actual</label><span class="val" id="oTrack">-</span></div>
+    <div style="padding-top:6px">
+      <button class="mbtn" id="oPlayPause">Pausar musica</button>
+      <button class="mbtn" id="oNextTrack">Siguiente pista</button>
+    </div>
+  </div>
+  <div class="big alt" id="oClose">VOLVER</div>
+</div>
+
+<div class="screen" id="modGate">
+  <h2>MOD MENU</h2>
+  <div class="sub">Introduce la clave de acceso</div>
+  <input type="password" id="modKey" class="keyin" inputmode="numeric" autocomplete="off" placeholder="clave">
+  <div class="sub err" id="modKeyErr"></div>
+  <div class="big" id="modKeyOk">ENTRAR</div>
+  <div class="big alt" id="modKeyCancel">VOLVER</div>
+</div>
+
+<div class="screen" id="exitScr">
+  <h2>SALIR</h2>
+  <div class="sub">Puedes cerrar esta pestana para salir del juego.</div>
+  <div class="big alt" id="exitBack">VOLVER AL MENU</div>
 </div>
 
 <div id="mod">

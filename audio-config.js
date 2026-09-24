@@ -32,9 +32,11 @@ window.HELLRUSH_AUDIO = {
        boss   -> cuando hay un jefe
      Si dejas una ruta vacia ("") esa capa usa la musica interna del juego. */
   music: {
+    menu:    "audio/music/musica-menu.mp3",      // MENU PRINCIPAL: suena en el titulo, opciones y pantalla de muerte
     calm:    "audio/music/musica-calma.mp3",
     battle:  "audio/music/musica-batalla.mp3",
-    boss:    "audio/music/musica-jefe.mp3"
+    boss:    "audio/music/musica-jefe.mp3",
+    versus:  "audio/music/musica-versus.mp3"     // MODO VERSUS: suena durante los duelos (si no existe, usa la de batalla)
   },
 
   /* ---------- MUSICA POR OLEADA (opcional) ----------
@@ -90,6 +92,12 @@ window.HELLRUSH_AUDIO = {
     hookFire:  ["player", "audio/sfx/player/gancho-lanzar.mp3"],
     hookHit:   ["player", "audio/sfx/player/gancho-clavar.mp3"],
     parry:     ["player", "audio/sfx/player/parry.mp3"],
+
+    /* PASOS -> audio/sfx/steps/
+       ESTE ES EL ARCHIVO DE LOS PASOS. Para cambiarlo, sube tu sonido con el mismo nombre
+       (pasos.mp3) a la carpeta audio/sfx/steps/ y reemplazalo. No hace falta tocar codigo.
+       Debe ser UN solo paso, corto (menos de 0.4 s). El juego lo repite al caminar. */
+    step:      ["player", "audio/sfx/steps/pasos.mp3"],
 
     /* ENTORNO -> audio/sfx/environment/ */
     slam:      ["player", "audio/sfx/environment/explosion.mp3"],

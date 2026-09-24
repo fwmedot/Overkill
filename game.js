@@ -782,8 +782,20 @@ const ETYPES = {
   imp:     { hp: 24,  speed: 8.2,  size: [0.7, 1.4, 0.7], dmg: 10, melee: true,  score: 180, hit: [0.7, 1.4, 0.7], leaper: true },
   bomber:  { hp: 35,  speed: 5.4,  size: [1.0, 1.0, 1.0], dmg: 40, melee: false, score: 220, hit: [1.0, 1.0, 1.0], explosive: true },
   sniper:  { hp: 30,  speed: 0,    size: [0.7, 1.7, 0.7], dmg: 22, melee: false, score: 250, hit: [0.7, 1.7, 0.7], fireRate: 2.8, sniper: true },
-  warden:  { hp: 450, speed: 2.9,  size: [2.4, 4.2, 2.4], dmg: 30, melee: true,  score: 2500, heavy: true, hit: [2.4, 4.2, 2.4], boss: true }
+  warden:  { hp: 450, speed: 2.9,  size: [2.4, 4.2, 2.4], dmg: 30, melee: true,  score: 2500, heavy: true, hit: [2.4, 4.2, 2.4], boss: true, bossName: 'EL CARCELERO' },
+  /* --- JEFES 2 a 5 (NUEVOS). Cada uno tiene su propia mecanica en updateEnemies. --- */
+  widow:   { hp: 380, speed: 6.2,  size: [1.8, 2.6, 1.8], dmg: 22, melee: true,  score: 3000, heavy: true, hit: [1.8, 2.6, 1.8], boss: true, bossName: 'LA VIUDA' },
+  bombardier: { hp: 420, speed: 3.4, size: [2.2, 3.2, 2.2], dmg: 34, melee: false, score: 3500, heavy: true, hit: [2.2, 3.2, 2.2], boss: true, bossName: 'EL BOMBARDERO' },
+  vortex:  { hp: 400, speed: 4.6,  size: [1.6, 3.0, 1.6], dmg: 26, melee: false, score: 4000, heavy: true, hit: [1.6, 3.0, 1.6], boss: true, bossName: 'EL VORTICE' },
+  executor:{ hp: 620, speed: 3.8,  size: [2.6, 4.4, 2.6], dmg: 40, melee: true,  score: 5000, heavy: true, hit: [2.6, 4.4, 2.6], boss: true, bossName: 'EL EJECUTOR' }
 };
+/* ORDEN DE LOS JEFES: cada vez que toca un jefe se elige el siguiente de esta lista.
+   Despues del ultimo se repite desde el primero (con mas vida, ver beginWave). */
+const BOSS_ORDER = ['warden', 'widow', 'bombardier', 'vortex', 'executor'];
+function bossForWave(wave) {
+  const n = Math.max(1, Math.round(wave / Math.max(1, CFG.bossEvery || 5)));   // 1er jefe, 2o jefe...
+  return BOSS_ORDER[(n - 1) % BOSS_ORDER.length];
+}
 const enemies = [];
 const projectiles = [];
 const particles = [];
@@ -931,7 +943,87 @@ function buildWarden() {
   g.add(parts.legL, parts.legR, parts.head, parts.armL, parts.armR);
   return { g, parts, base: 0 };
 }
-const BUILDERS = { husk: buildHusk, shooter: buildShooter, charger: buildCharger, brute: buildBrute, imp: buildImp, bomber: buildBomber, sniper: buildSniper, warden: buildWarden };
+
+/* =====================================================================
+   JEFES 2-5 (NUEVOS) - modelos.
+   Usan las mismas piezas que el Carcelero (legL, legR, armL, armR, head, core)
+   para que el sistema de animacion existente los mueva sin codigo extra.
+   Cada uno tiene una silueta y un color de brillo propios, para que se
+   reconozcan de un vistazo.
+   ===================================================================== */
+function glowMat(hex) { return new THREE.MeshBasicMaterial({ color: hex }); }
+
+/* LA VIUDA: delgada y rapida, con 4 patas extra tipo arana y brillo morado. */
+function buildWidow() {
+  const g = new THREE.Group(); const parts = {};
+  g.add(eb(1.3, 1.1, 0.9, TEX.armor, 0, 1.6, 0));
+  g.add(eb(0.9, 0.5, 1.5, TEX.flesh, 0, 1.25, -0.9));                       // abdomen
+  const core = eb(0.5, 0.5, 0.12, TEX.bone, 0, 1.65, 0.5); core.material = glowMat(0xc030ff); parts.core = core; g.add(core);
+  parts.legL = limb(0.4, 1.3, 0.4, TEX.armor, -0.45, 1.3, 0); parts.legR = limb(0.4, 1.3, 0.4, TEX.armor, 0.45, 1.3, 0);
+  for (const s of [-1, 1]) for (const z of [-0.5, -1.3]) {                  // patas de arana decorativas
+    const leg = eb(1.3, 0.12, 0.12, TEX.armor, s * 1.0, 1.0, z); leg.rotation.z = s * -0.5; g.add(leg);
+  }
+  parts.head = new THREE.Group(); parts.head.position.set(0, 2.35, 0.1);
+  parts.head.add(eb(0.6, 0.55, 0.6, TEX.armor, 0, 0.05, 0));
+  for (const x of [-0.18, 0, 0.18]) { const e = eb(0.12, 0.12, 0.05, TEX.bone, x, 0.1, 0.32); e.material = glowMat(0xff30ff); parts.head.add(e); }
+  parts.armL = limb(0.3, 1.5, 0.3, TEX.armor, -0.85, 2.1, 0); parts.armR = limb(0.3, 1.5, 0.3, TEX.armor, 0.85, 2.1, 0);
+  g.add(parts.legL, parts.legR, parts.head, parts.armL, parts.armR);
+  return { g, parts, base: 0 };
+}
+
+/* EL BOMBARDERO: ancho, con tanque de explosivos en la espalda y cañon en el brazo. Brillo naranja. */
+function buildBombardier() {
+  const g = new THREE.Group(); const parts = {};
+  g.add(eb(2.0, 1.6, 1.3, TEX.armor, 0, 2.3, 0));
+  g.add(eb(1.4, 1.5, 0.9, TEX.rock, 0, 2.5, -1.0));                          // tanque
+  const core = eb(0.8, 0.8, 0.14, TEX.bone, 0, 2.35, 0.68); core.material = glowMat(0xff8a00); parts.core = core; g.add(core);
+  for (const y of [1.9, 2.4, 2.9]) { const band = eb(1.5, 0.12, 1.0, TEX.gun, 0, y, -1.0); g.add(band); }
+  parts.legL = limb(0.8, 1.6, 0.8, TEX.armor, -0.6, 1.6, 0); parts.legR = limb(0.8, 1.6, 0.8, TEX.armor, 0.6, 1.6, 0);
+  parts.head = new THREE.Group(); parts.head.position.set(0, 3.4, 0.1);
+  parts.head.add(eb(0.8, 0.7, 0.75, TEX.rock, 0, 0.05, 0));
+  const visor = eb(0.7, 0.18, 0.06, TEX.bone, 0, 0.08, 0.4); visor.material = glowMat(0xffa000); parts.head.add(visor);
+  parts.armL = limb(0.7, 1.9, 0.7, TEX.armor, -1.4, 3.0, 0); parts.armR = limb(0.7, 1.9, 0.7, TEX.armor, 1.4, 3.0, 0);
+  parts.armR.add(eb(0.5, 0.5, 1.4, TEX.gun, 0, -1.9, 0.6));                  // cañon
+  g.add(parts.legL, parts.legR, parts.head, parts.armL, parts.armR);
+  return { g, parts, base: 0 };
+}
+
+/* EL VORTICE: figura alta y fina, flotando, con anillo giratorio. Brillo cian. */
+function buildVortex() {
+  const g = new THREE.Group(); const parts = {};
+  g.add(eb(0.9, 1.9, 0.7, TEX.bone, 0, 2.0, 0));
+  const core = eb(0.6, 0.6, 0.12, TEX.bone, 0, 2.2, 0.4); core.material = glowMat(0x20e8ff); parts.core = core; g.add(core);
+  parts.ring = new THREE.Group(); parts.ring.position.set(0, 2.2, 0);
+  for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; const p = eb(0.4, 0.4, 0.4, TEX.rock, Math.cos(a) * 1.3, 0, Math.sin(a) * 1.3); p.material = glowMat(0x18b8d8); parts.ring.add(p); }
+  g.add(parts.ring);
+  parts.legL = limb(0.3, 1.1, 0.3, TEX.bone, -0.25, 1.1, 0); parts.legR = limb(0.3, 1.1, 0.3, TEX.bone, 0.25, 1.1, 0);
+  parts.head = new THREE.Group(); parts.head.position.set(0, 3.25, 0.05);
+  parts.head.add(eb(0.55, 0.65, 0.55, TEX.bone, 0, 0.05, 0));
+  const e1 = eb(0.34, 0.1, 0.05, TEX.bone, 0, 0.1, 0.29); e1.material = glowMat(0x60ffff); parts.head.add(e1);
+  parts.armL = limb(0.25, 1.6, 0.25, TEX.bone, -0.75, 2.8, 0); parts.armR = limb(0.25, 1.6, 0.25, TEX.bone, 0.75, 2.8, 0);
+  g.add(parts.legL, parts.legR, parts.head, parts.armL, parts.armR);
+  return { g, parts, base: 0 };
+}
+
+/* EL EJECUTOR: el mas grande y pesado, armadura roja y cuernos. Brillo rojo sangre. */
+function buildExecutor() {
+  const g = new THREE.Group(); const parts = {};
+  g.add(eb(2.8, 2.0, 1.6, TEX.armor, 0, 3.1, 0));
+  g.add(eb(3.2, 0.6, 1.5, TEX.rock, 0, 4.2, 0));                             // hombreras
+  const core = eb(1.2, 1.0, 0.16, TEX.bone, 0, 3.1, 0.85); core.material = glowMat(0xff1010); parts.core = core; g.add(core);
+  parts.legL = limb(1.1, 2.1, 1.1, TEX.armor, -0.9, 2.1, 0); parts.legR = limb(1.1, 2.1, 1.1, TEX.armor, 0.9, 2.1, 0);
+  parts.head = new THREE.Group(); parts.head.position.set(0, 4.7, 0.1);
+  parts.head.add(eb(1.1, 0.95, 1.0, TEX.armor, 0, 0.1, 0));
+  for (const x of [-0.5, 0.5]) { const h = eb(0.2, 1.0, 0.2, TEX.bone, x, 0.9, 0); h.rotation.z = x > 0 ? -0.4 : 0.4; parts.head.add(h); }
+  const e1 = eb(0.7, 0.16, 0.06, TEX.bone, 0, 0.18, 0.52); e1.material = glowMat(0xff2020); parts.head.add(e1);
+  parts.armL = limb(0.95, 2.4, 0.95, TEX.armor, -2.0, 4.0, 0); parts.armR = limb(0.95, 2.4, 0.95, TEX.armor, 2.0, 4.0, 0);
+  parts.armL.add(eb(1.3, 1.1, 1.3, TEX.rock, 0, -2.6, 0)); parts.armR.add(eb(1.3, 1.1, 1.3, TEX.rock, 0, -2.6, 0));
+  g.add(parts.legL, parts.legR, parts.head, parts.armL, parts.armR);
+  return { g, parts, base: 0 };
+}
+
+const BUILDERS = { husk: buildHusk, shooter: buildShooter, charger: buildCharger, brute: buildBrute, imp: buildImp, bomber: buildBomber, sniper: buildSniper, warden: buildWarden,
+  widow: buildWidow, bombardier: buildBombardier, vortex: buildVortex, executor: buildExecutor };
 
 function spawnEnemy(type, pos) {
   const d = ETYPES[type];
@@ -1090,6 +1182,26 @@ function animateEnemy(e, dt, speedH) {
     p.armL.rotation.x = e.state === 1 ? -2.9 + slam * 0.1 : -sw * 0.25; p.armR.rotation.x = e.state === 1 ? -2.9 + slam * 0.1 : sw * 0.25;
     p.core.material.color.setHex(Math.floor(gt * 5) % 2 ? 0xff3a10 : 0xffb020);
     p.head.position.y = 4.15 + Math.abs(Math.sin(e.walk)) * 0.05 * clamp(speedH / 2, 0, 1);
+  } else if (e.type === 'widow') {
+    p.legL.rotation.x = sw * 0.9; p.legR.rotation.x = -sw * 0.9;
+    const fan = e.state === 2 ? -1.6 : 0;
+    p.armL.rotation.x = e.state === 2 ? fan : -sw * 0.6; p.armR.rotation.x = e.state === 2 ? fan : sw * 0.6;
+    p.core.material.color.setHex(Math.floor(gt * 7) % 2 ? 0xc030ff : 0xff80ff);
+  } else if (e.type === 'bombardier') {
+    p.legL.rotation.x = sw * 0.3; p.legR.rotation.x = -sw * 0.3;
+    p.armR.rotation.x = -0.4 - (e.shootAnim > 0 ? 1.1 * e.shootAnim : 0); p.armL.rotation.x = sw * 0.2;
+    p.core.material.color.setHex(Math.floor(gt * 4) % 2 ? 0xff8a00 : 0xffe060);
+  } else if (e.type === 'vortex') {
+    p.legL.rotation.x = sw * 0.2; p.legR.rotation.x = -sw * 0.2;
+    p.armL.rotation.x = e.state === 2 ? -2.4 : -0.3 + Math.sin(gt * 2) * 0.2; p.armR.rotation.x = e.state === 2 ? -2.4 : -0.3 - Math.sin(gt * 2) * 0.2;
+    p.core.material.color.setHex(Math.floor(gt * 6) % 2 ? 0x20e8ff : 0xffffff);
+    p.head.position.y = 3.25 + Math.sin(gt * 3) * 0.12;
+  } else if (e.type === 'executor') {
+    p.legL.rotation.x = sw * (e.state === 2 ? 0.9 : 0.4); p.legR.rotation.x = -sw * (e.state === 2 ? 0.9 : 0.4);
+    const crouch = e.state === 1 ? -0.5 : 0;
+    p.armL.rotation.x = e.state === 2 ? -1.4 : -sw * 0.3 + crouch; p.armR.rotation.x = e.state === 2 ? -1.4 : sw * 0.3 + crouch;
+    p.core.material.color.setHex(e.state === 1 ? (Math.floor(gt * 12) % 2 ? 0xffffff : 0xff1010) : (Math.floor(gt * 4) % 2 ? 0xff1010 : 0xff7040));
+    p.head.position.y = 4.7 + Math.abs(Math.sin(e.walk)) * 0.05 * clamp(speedH / 3, 0, 1);
   } else if (e.type === 'brute') {
     p.legL.rotation.x = sw * 0.5; p.legR.rotation.x = -sw * 0.5;
     p.armL.rotation.x = -sw * 0.35 - 0.1; p.armR.rotation.x = sw * 0.35 - 0.1;
@@ -1225,6 +1337,105 @@ function updateEnemies(dt) {
           }
         }
         if (!e.enraged && e.hp < e.d.hp * 0.5) { e.enraged = true; e.d = Object.assign({}, e.d, { speed: e.d.speed * 1.5 }); flashMsg('\u00a1ENFURECIDO!'); sfx('boss'); P.shake = 0.8; }
+      } else if (e.type === 'widow') {
+        /* LA VIUDA - rapida y agil. Ciclo: persigue -> salta sobre ti (aterriza con onda pequena)
+           -> dispara un abanico de 5 proyectiles. Enfurecida a media vida: ataca mas seguido. */
+        const rage = e.enraged ? 0.6 : 1;
+        if (e.state === 0) {
+          e.vel.x = toP.x * e.d.speed; e.vel.z = toP.z * e.d.speed;
+          if (e.cd <= 0) {
+            e.atk = (e.atk || 0) + 1;
+            if (e.atk % 2 === 0) { e.state = 2; e.st = 0.5; sfx('telegraph'); }                      // abanico
+            else if (e.grounded && dist > 5) { e.state = 1; e.st = 0.45; sfx('telegraph'); }        // salto
+            else e.cd = 0.4;
+          }
+        } else if (e.state === 1) {                                  // preparar salto
+          e.st -= dt; e.vel.x = e.vel.z = 0;
+          if (e.st <= 0) { e.vel.x = toP.x * 20; e.vel.z = toP.z * 20; e.vel.y = 15; e.grounded = false; e.state = 3; e.st = 0.3; }
+        } else if (e.state === 3) {                                  // en el aire; al aterrizar, onda
+          e.st -= dt;
+          if (e.grounded && e.st <= 0) { shockwave(p, e.d.dmg * 0.7); e.state = 0; e.cd = 1.2 * rage; }
+        } else {                                                     // abanico de proyectiles
+          e.st -= dt; e.vel.x = e.vel.z = 0;
+          if (e.st <= 0) {
+            const base = Math.atan2(toP.x, toP.z);
+            for (let k = -2; k <= 2; k++) {
+              const a = base + k * 0.22;
+              shootProjectile(p.clone().add(new THREE.Vector3(0, 1.8, 0)), new THREE.Vector3(Math.sin(a), 0.02, Math.cos(a)), 26, 9, true);
+            }
+            sfx('enemyShot'); e.state = 0; e.cd = 1.5 * rage;
+          }
+        }
+        if (!e.enraged && e.hp < e.d.hp * 0.5) { e.enraged = true; e.d = Object.assign({}, e.d, { speed: e.d.speed * 1.35 }); flashMsg('\u00a1LA VIUDA SE ENFURECE!'); sfx('boss'); P.shake = 0.7; }
+      } else if (e.type === 'bombardier') {
+        /* EL BOMBARDERO - mantiene la distancia (como un tirador pesado) y lanza granadas en arco
+           hacia donde estas. A media vida lanza 3 a la vez, en abanico. */
+        const want = dist > 24 ? 1 : dist < 14 ? -1 : 0;
+        e.vel.x = toP.x * e.d.speed * want; e.vel.z = toP.z * e.d.speed * want;
+        if (e.cd <= 0 && dist < 60) {
+          const tgt = new THREE.Vector3(P.pos.x + P.vel.x * 0.6, world.floorY(P.pos.x, P.pos.z) + 0.3, P.pos.z + P.vel.z * 0.6);   // adelanta tu movimiento
+          const from = p.clone().add(new THREE.Vector3(0, 3.2, 0));
+          throwGrenade(from, tgt, e.d.dmg);
+          if (e.enraged) {
+            for (const off of [-5, 5]) throwGrenade(from, new THREE.Vector3(tgt.x + toP.z * off, tgt.y, tgt.z - toP.x * off), e.d.dmg);
+          }
+          sfx('enemyShot'); e.shootAnim = 1; e.cd = e.enraged ? 2.4 : 3.0;
+        }
+        if (!e.enraged && e.hp < e.d.hp * 0.5) { e.enraged = true; flashMsg('\u00a1EL BOMBARDERO SE ENFURECE!'); sfx('boss'); P.shake = 0.7; }
+      } else if (e.type === 'vortex') {
+        /* EL VORTICE - se teletransporta cerca de ti, se queda quieto un momento y libera dos ondas
+           de choque seguidas (hay que saltar las dos). Entre medias dispara proyectiles rapidos. */
+        if (e.state === 0) {
+          e.vel.x = toP.x * e.d.speed * 0.6; e.vel.z = toP.z * e.d.speed * 0.6;
+          if (e.cd <= 0) { e.state = 1; e.st = 0.55; sfx('telegraph'); impactRing(new THREE.Vector3(p.x, p.y - 1.2, p.z), 0x20e8ff, 2.4); }
+        } else if (e.state === 1) {                                  // desaparece y reaparece cerca del jugador
+          e.st -= dt; e.vel.x = e.vel.z = 0;
+          if (e.st <= 0) {
+            const a = Math.random() * Math.PI * 2, r = 9 + Math.random() * 4;
+            const nx = P.pos.x + Math.cos(a) * r, nz = P.pos.z + Math.sin(a) * r;
+            const ny = isSpawnClear(nx, nz, e.d.size);
+            if (ny !== null) { p.set(nx, ny, nz); burst(p, 0x20e8ff, 18, 10); }
+            e.state = 2; e.st = 0.5; e.wave2 = false;
+          }
+        } else {                                                     // 2 ondas y salva de proyectiles
+          e.st -= dt; e.vel.x = e.vel.z = 0;
+          if (e.st <= 0 && !e.wave2) { shockwave(p, e.d.dmg); e.wave2 = true; e.st = 0.55; }
+          else if (e.st <= 0 && e.wave2) {
+            shockwave(p, e.d.dmg);
+            const n = e.enraged ? 6 : 3;
+            for (let k = 0; k < n; k++) {
+              const dir = new THREE.Vector3(target.x - p.x + (k - (n - 1) / 2) * 2.2, 0, target.z - p.z).normalize();
+              shootProjectile(p.clone().add(new THREE.Vector3(0, 2.2, 0)), dir, 30, 8, true);
+            }
+            sfx('enemyShot'); e.state = 0; e.cd = e.enraged ? 1.3 : 2.2;
+          }
+        }
+        if (e.model.parts.ring) e.model.parts.ring.rotation.y += dt * (e.enraged ? 6 : 3);
+        if (!e.enraged && e.hp < e.d.hp * 0.5) { e.enraged = true; flashMsg('\u00a1EL VORTICE SE ENFURECE!'); sfx('boss'); P.shake = 0.7; }
+      } else if (e.type === 'executor') {
+        /* EL EJECUTOR - el mas duro. Carga en linea recta a gran velocidad (se ve venir: se agacha
+           y brilla). Cada 3 cargas, invoca 2 esbirros (husk). Al chocar con un muro se aturde. */
+        if (e.state === 0) {
+          e.vel.x = toP.x * e.d.speed; e.vel.z = toP.z * e.d.speed;
+          if (e.cd <= 0 && dist < 30) { e.state = 1; e.st = 0.7; e.dir = toP.clone(); e.vel.set(0, 0, 0); sfx('telegraph'); impactRing(new THREE.Vector3(p.x, p.y - 2, p.z), 0xff2020, 3.2); }
+        } else if (e.state === 1) {                                  // se agacha y apunta
+          e.st -= dt; e.vel.x = e.vel.z = 0; e.dir = toP.clone();
+          if (e.st <= 0) { e.state = 2; e.st = 1.0; e.charges = (e.charges || 0) + 1; }
+        } else if (e.state === 2) {                                  // CARGA
+          e.st -= dt; e.vel.x = e.dir.x * 26; e.vel.z = e.dir.z * 26;
+          if (e.st <= 0) {
+            e.state = (e.charges % 3 === 0) ? 3 : 0; e.st = 0.8; e.cd = e.enraged ? 1.2 : 2.0;
+            if (e.state === 0) e.vel.x = e.vel.z = 0;
+          }
+        } else {                                                     // aturdido: invoca esbirros
+          e.st -= dt; e.vel.x = e.vel.z = 0;
+          if (e.st <= 0) {
+            let alive = 0; for (const o of enemies) if (o.type === 'husk') alive++;
+            if (alive < 8) for (let k = 0; k < 2; k++) { const sp = pickSpawnPoint(ETYPES.husk.size); spawnEnemy('husk', sp); }
+            flashMsg('\u00a1INVOCA ESBIRROS!'); sfx('wave'); e.state = 0;
+          }
+        }
+        if (!e.enraged && e.hp < e.d.hp * 0.5) { e.enraged = true; e.d = Object.assign({}, e.d, { speed: e.d.speed * 1.3 }); flashMsg('\u00a1EL EJECUTOR SE ENFURECE!'); sfx('boss'); P.shake = 0.9; }
       } else {
         e.vel.x = toP.x * e.d.speed; e.vel.z = toP.z * e.d.speed;
       }
@@ -1409,6 +1620,35 @@ function updateLasers() {
   $('laserWarn').classList.toggle('on', warn);
 }
 
+/* NUEVO - GRANADA EN ARCO (la usa El Bombardero)
+   Es un proyectil con gravedad que explota al tocar el suelo o cerca del jugador. */
+const lobs = [];
+function throwGrenade(from, target, dmg) {
+  const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.42, 0), new THREE.MeshBasicMaterial({ color: 0xff8a00 }));
+  m.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.22, 0), new THREE.MeshBasicMaterial({ color: 0xfff0a0 })));
+  m.position.copy(from); scene.add(m);
+  // velocidad inicial para llegar al objetivo en ~1.1 s con arco
+  const T = 1.1;
+  const vx = (target.x - from.x) / T, vz = (target.z - from.z) / T;
+  const vy = (target.y - from.y) / T + 0.5 * 30 * T;
+  lobs.push({ mesh: m, vel: new THREE.Vector3(vx, vy, vz), dmg, life: 4 });
+}
+function updateLobs(dt) {
+  for (let i = lobs.length - 1; i >= 0; i--) {
+    const l = lobs[i]; l.life -= dt;
+    l.vel.y -= 30 * dt;
+    l.mesh.position.addScaledVector(l.vel, dt);
+    l.mesh.rotation.x += dt * 8; l.mesh.rotation.z += dt * 6;
+    const pp = l.mesh.position;
+    const fy = world.floorY(pp.x, pp.z);
+    const hitGround = pp.y <= fy + 0.3 && l.vel.y < 0;
+    const nearP = Math.hypot(pp.x - P.pos.x, pp.z - P.pos.z) < 1.2 && Math.abs(pp.y - (P.pos.y - 0.8)) < 1.6;
+    if (hitGround || nearP || l.life <= 0) {
+      explode(new THREE.Vector3(pp.x, Math.max(pp.y, fy + 0.3), pp.z), 6.5, l.dmg, null);
+      scene.remove(l.mesh); disposeGroup(l.mesh); lobs.splice(i, 1);
+    }
+  }
+}
 function shootProjectile(p, dir, speed, dmg, fast) {
   const m = new THREE.Mesh(new THREE.OctahedronGeometry(0.3, 0), new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
   const core = new THREE.Mesh(new THREE.OctahedronGeometry(0.16, 0), new THREE.MeshBasicMaterial({ color: 0xffe08a }));
@@ -1639,6 +1879,11 @@ function trackGet(key) {
 }
 /* Que capa deberia sonar ahora mismo y con que "key" de archivo. */
 function musicWanted() {
+  if (AU.forced && AU.musicFile[AU.forced]) return AU.forced;
+  // En el menu (no hay partida en marcha) suena la pista de menu, si existe.
+  if (!S.running) return AU.musicFile.menu ? 'menu' : null;
+  // Modo Versus: pista propia; si no existe, la de batalla.
+  if (MODE && MODE.rivals) return AU.musicFile.versus ? 'versus' : (AU.musicFile.battle ? 'battle' : null);
   if (bossActive) return AU.musicFile.boss ? 'boss' : null;
   const wk = 'wave' + S.wave;
   const combatKey = AU.musicFile[wk] ? wk : 'battle';
@@ -1667,6 +1912,21 @@ function musicFadeStep(dt, wanted) {
   }
   return any;
 }
+/* Lista de pistas que el jugador puede recorrer con "Siguiente pista" (las que existen como archivo). */
+const TRACK_LABELS = { menu: 'Menu', calm: 'Calma', battle: 'Batalla', boss: 'Jefe', versus: 'Versus' };
+AU.forced = null;                              // pista elegida a mano (null = automatica)
+function trackList() { return Object.keys(TRACK_LABELS).filter(k => AU.musicFile[k]); }
+function trackLabel() {
+  if (AU.forced) return TRACK_LABELS[AU.forced] + ' (manual)';
+  const w = musicWanted();
+  if (w && String(w).indexOf('wave') === 0) return 'Oleada ' + String(w).slice(4);
+  return w ? (TRACK_LABELS[w] || w) : 'Interna';
+}
+function nextTrack() {
+  const l = trackList(); if (!l.length) return;
+  const i = AU.forced ? l.indexOf(AU.forced) : -1;
+  AU.forced = i + 1 >= l.length ? null : l[i + 1];      // despues de la ultima vuelve a "automatica"
+}
 function musicStop() {
   for (const k of Object.keys(AU.tracks)) { const t = AU.tracks[k]; try { t.el.pause(); } catch (e) {} t.playing = false; t.cur = 0; if (t.g) t.g.gain.value = 0; }
 }
@@ -1694,6 +1954,7 @@ function sfxNoise(dur, freq, q, vol = 0.3, type = 'lowpass', delay = 0, sweepTo)
 }
 
 const SFX = {
+  step() { sfxNoise(0.07, 380, 0.8, 0.22, 'lowpass'); sfxTone(90, 55, 0.07, 'sine', 0.18); },
   pistol()  { sfxNoise(0.12, 3200, 1, 0.35, 'bandpass', 0, 700); sfxTone(420, 90, 0.14, 'square', 0.22); },
   shotgun() { sfxNoise(0.32, 1800, 0.7, 0.6, 'lowpass', 0, 200); sfxTone(150, 40, 0.28, 'sawtooth', 0.4); },
   rail()    { sfxTone(1800, 60, 0.5, 'sawtooth', 0.32); sfxNoise(0.45, 4500, 2, 0.28, 'bandpass', 0, 300); sfxTone(90, 45, 0.6, 'sine', 0.5); },
@@ -1734,11 +1995,19 @@ function sfx(name) {
    la transicion suave. Si NO hay ningun archivo de musica, suena la musica
    interna de siempre, que ademas se intensifica con tu estilo. */
 const BASS = [55, 55, 82.4, 55, 65.4, 55, 73.4, 82.4];
+/* Pausa manual de la musica (boton "Pausar musica" en Opciones). No la desactiva: solo la detiene. */
+AU.userPaused = false;
 function updateMusic(dt) {
   if (!AU.ctx) return;
-  const playing = S.running && !S.paused;
-  if (!playing) { for (const k of Object.keys(AU.tracks)) { const t = AU.tracks[k]; if (t.playing) { try { t.el.pause(); } catch (e) {} t.playing = false; } } return; }
+  // Con el juego en pausa (S.paused) la musica se detiene. En el menu (S.running=false) SI suena.
+  const inGamePause = S.running && S.paused;
+  if (inGamePause || AU.userPaused) { for (const k of Object.keys(AU.tracks)) { const t = AU.tracks[k]; if (t.playing) { try { t.el.pause(); } catch (e) {} t.playing = false; } } return; }
   if (!CFG.music) { musicStop(); return; }
+  if (!S.running) {                       // estamos en un menu: solo musica de archivo (sin la interna fabricada)
+    const w = musicWanted();
+    musicFadeStep(dt, w);
+    return;
+  }
   const wanted = musicWanted();
   if (wanted) { musicFadeStep(dt, wanted); return; }
   // Sin archivos de musica: musica interna fabricada por codigo (la de siempre)
@@ -1768,7 +2037,8 @@ function updateMusic(dt) {
 const S = {
   running: false, paused: false, wave: 0, score: 0, kills: 0, style: 0, styleT: 0, time: 0,
   parries: 0, mult: 1, rank: 0, rankT: 0, airKills: 0, lastKillT: -9, chain: 0,
-  waveState: 'idle', waveTarget: 0, waveSpawned: 0, waveTimer: 0, waveSpawnT: 0
+  waveState: 'idle', waveTarget: 0, waveSpawned: 0, waveTimer: 0, waveSpawnT: 0,
+  mode: 'infinite'
 };
 let bossActive = false;
 const RANKS = [
@@ -1957,7 +2227,8 @@ function beginWave() {
 
   if (isBoss) {
     sfx('boss'); P.shake = 0.9;
-    flashMsg('\u00a1JEFE: EL CARCELERO!');
+    S.waveBossType = bossForWave(S.wave);
+    flashMsg('\u00a1JEFE: ' + ETYPES[S.waveBossType].bossName + '!');
   } else {
     sfx('wave');
     if (S.wave === 3) { WEAPONS[2].unlocked = true; flashMsg('RIEL DESBLOQUEADO'); }
@@ -2076,8 +2347,14 @@ function updateWaves(dt) {
       if (S.waveIsBoss) {
         const bp = new THREE.Vector3(0, 1.2, -18);
         let bs = null;
-        try { bs = spawnEnemy('warden', bp); } catch (err) { bs = null; }
-        if (bs) { bs.hp = bs.d.hp + S.wave * 45; bs.maxHp = bs.hp; bossActive = true; $('bossBar').classList.add('on'); S.waveSpawned++; }
+        const bossType = S.waveBossType || 'warden';
+        try { bs = spawnEnemy(bossType, bp); } catch (err) { bs = null; }
+        if (bs) {
+          // Vida: base del jefe + refuerzo por oleada. Al repetir el ciclo de 5 jefes, +35% por vuelta.
+          const lap = Math.floor((Math.max(1, Math.round(S.wave / Math.max(1, CFG.bossEvery || 5))) - 1) / BOSS_ORDER.length);
+          bs.hp = Math.round((bs.d.hp + S.wave * 45) * (1 + lap * 0.35)); bs.maxHp = bs.hp;
+          bossActive = true; $('bossBar').classList.add('on'); $('bossName').textContent = bs.d.bossName || 'JEFE'; S.waveSpawned++;
+        }
         else S.waveFails++;
       } else {
         spawnFromPool();
@@ -2281,7 +2558,7 @@ bindBtn('bDash', () => IN.dash = true);
 bindBtn('bSlide', () => { IN.slide = true; IN.slideHeld = true; }, () => IN.slideHeld = false);
 bindBtn('bHook', () => { hook.held = true; if (hook.state === 0) hookFire(); }, () => { hook.held = false; if (hook.state === 2 || hook.state === 3) hookRelease(true); });
 bindBtn('bSwap', () => nextWeapon());
-bindBtn('bMenu', () => openMod('game'));
+bindBtn('bMenu', () => openPause());
 
 const keys = {};
 addEventListener('keydown', e => {
@@ -2291,7 +2568,7 @@ addEventListener('keydown', e => {
   if (e.code === 'ControlLeft' || e.code === 'KeyC') { IN.slide = true; IN.slideHeld = true; }
   if (e.code === 'KeyQ') nextWeapon();
   if (e.code === 'KeyE') { hook.held = true; if (hook.state === 0) hookFire(); }
-  if (e.code === 'Escape') openMod('game');
+  if (e.code === 'Escape') { if (S.running && !S.paused) openPause(); else if (S.running && S.paused && $('pause').classList.contains('on')) closePause(); }
 });
 addEventListener('keyup', e => {
   keys[e.code] = false;
@@ -2304,6 +2581,30 @@ addEventListener('keyup', e => {
    MOVIMIENTO
    ===================================================================== */
 let slamPending = false;
+/* =====================================================================
+   NUEVO - SONIDO DE PASOS
+   =====================================================================
+   Suena un paso cada cierta DISTANCIA recorrida en el suelo (no cada cierto
+   tiempo). Asi: si corres mas rapido, los pasos van mas seguidos; si te
+   quedas quieto, no suena nada.
+   NO suena cuando: vuelas, estas en el aire, te deslizas, haces dash o
+   estas colgado del gancho.
+   El archivo es audio/sfx/steps/pasos.mp3 (mira audio-config.js).
+   Si no existe el archivo, el juego usa un "toc" interno suave.
+   ===================================================================== */
+const STEP = { dist: 0, every: 2.1, minSpeed: 2.5, flip: false };
+function updateFootsteps(dt) {
+  if (!P.alive || CFG.fly) { STEP.dist = 0; return; }
+  const speed = Math.hypot(P.vel.x, P.vel.z);
+  const canStep = P.onGround && !P.sliding && P.dashT <= 0 && hook.state !== 2 && speed > STEP.minSpeed;
+  if (!canStep) { STEP.dist = Math.min(STEP.dist, STEP.every * 0.5); return; }   // al empezar a andar suena pronto
+  STEP.dist += speed * dt;
+  if (STEP.dist >= STEP.every) {
+    STEP.dist -= STEP.every;
+    STEP.flip = !STEP.flip;
+    sfx('step');
+  }
+}
 function updatePlayer(dt) {
   if (!P.alive) return;
   if (slamPending && P.onGround) {
@@ -2320,6 +2621,7 @@ function updatePlayer(dt) {
     if (hitN) addStyle('IMPACTO x' + hitN, 25 * hitN);
   }
   P.iframes -= dt;
+  updateFootsteps(dt);
 
   let mx = IN.mx, mz = IN.mz;
   if (keys.KeyA) mx -= 1; if (keys.KeyD) mx += 1; if (keys.KeyW) mz -= 1; if (keys.KeyS) mz += 1;
@@ -2506,9 +2808,9 @@ function frame(now) {
       for (let i = 0; i < steps; i++) updatePlayer(dt / steps);
       updateHook(dt);
       parryT = Math.max(0, parryT - dt);
-      updateEnemies(dt); updateProjectiles(dt); updateParticles(dt); updateTracers(dt);
+      updateEnemies(dt); updateProjectiles(dt); updateLobs(dt); updateParticles(dt); updateTracers(dt);
       updateFx(dt); updatePickups(dt); updateMusic(dt); updateLasers();
-      updateWaves(dt);
+      if (MODE.waves) updateWaves(dt);          // Versus no tiene oleadas de enemigos
       fireUpdate(dt);
       S.rankT = Math.max(0, S.rankT - dt * (6 + S.rank * 5));
       {
@@ -2526,6 +2828,7 @@ function frame(now) {
     if (CFG.debug) console.error('Error de simulacion capturado:', err);
   }
 
+  if (!S.running) updateMusic(dt);   // musica del menu
   updateMuzzle(dt);
   updatePunch(dt);
   lavaUniforms.uTime.value = gt;
@@ -2603,13 +2906,46 @@ function frame(now) {
 /* =====================================================================
    PANTALLAS Y MENUS
    ===================================================================== */
-function showScreen(id) { for (const s of ['title', 'pause', 'dead']) $(s).classList.toggle('on', s === id); }
 function setControls(on) { $('ctl').classList.toggle('on', on); $('hud').classList.toggle('on', on); }
 function randomSeed() { return Math.random().toString(36).slice(2, 8).toUpperCase(); }
+
+/* =====================================================================
+   NUEVO - SISTEMA DE MODOS DE JUEGO
+   =====================================================================
+   Cada modo es un objeto con sus REGLAS. Asi el Modo Infinito queda igual que
+   siempre y el Versus tiene reglas propias sin mezclarse.
+     waves      = true/false: si hay oleadas de enemigos (Infinito si, Versus no)
+     bosses     = true/false: si aparecen jefes
+     pickups    = true/false: si salen items de vida/municion
+     rivals     = true/false: si hay un jugador rival (Versus)
+     lava       = true/false: si la lava mata
+     killsToWin = cuantas bajas hacen falta para ganar (solo Versus)
+     respawnT   = segundos hasta reaparecer tras morir (solo Versus)
+   Para crear un modo nuevo: copia uno, cambia los valores y anadelo aqui.
+   ===================================================================== */
+const MODES = {
+  infinite: { id: 'infinite', name: 'MODO INFINITO', waves: true,  bosses: true,  pickups: true,  rivals: false, killsToWin: 0,  respawnT: 0 },
+  versus:   { id: 'versus',   name: 'MODO VERSUS',   waves: false, bosses: false, pickups: true,  rivals: true,  killsToWin: 10, respawnT: 3 }
+};
+let MODE = MODES.infinite;           // modo activo. Nunca es null.
+
+/* Inicia una partida en el modo indicado. Todos los botones del menu usan esta funcion. */
+function startMode(id) {
+  MODE = MODES[id] || MODES.infinite;
+  S.mode = MODE.id;
+  // El Modo Infinito respeta lo que el jugador tenga en el Mod Menu (jefe cada N oleadas, pickups...).
+  // Versus las anula: sus reglas son propias e independientes.
+  CFG._userBossEvery = CFG._userBossEvery === undefined ? CFG.bossEvery : CFG._userBossEvery;
+  CFG._userPickups = CFG._userPickups === undefined ? CFG.pickups : CFG._userPickups;
+  CFG.bossEvery = MODE.bosses ? CFG._userBossEvery : 0;
+  CFG.pickups = MODE.pickups ? CFG._userPickups : false;
+  newRun(CFG.seed);
+}
 
 function newRun(seed) {
   for (const e of [...enemies]) killEnemyQuiet(e);
   for (const p of projectiles) { scene.remove(p.mesh); disposeGroup(p.mesh); } projectiles.length = 0;
+  for (const l of lobs) { scene.remove(l.mesh); disposeGroup(l.mesh); } lobs.length = 0;
   for (const p of particles) { scene.remove(p.mesh); } particles.length = 0;
   for (const t of tracers) { scene.remove(t.m); } tracers.length = 0;
   hookRelease(false); hook.cd = 0;
@@ -2637,6 +2973,7 @@ function newRun(seed) {
 
 function openMod(from) {
   if (from === 'game') { S.paused = true; setControls(false); }
+  optsSync();
   $('mod').dataset.from = from;
   $('mod').classList.add('on');
   $('seedIn').value = currentSeedStr;
@@ -2652,13 +2989,86 @@ function closeMod() {
 /* NUEVO: sonido de boton en todos los botones de los menus */
 document.querySelectorAll('.big, .mbtn').forEach(b => b.addEventListener('touchstart', () => sfx('button'), { passive: true }));
 
-$('bStart').onclick = () => newRun(CFG.seed);
-$('bModT').onclick = () => { showScreen(null); openMod('title'); };
-$('bModP').onclick = () => { showScreen(null); openMod('pause'); };
-$('bResume').onclick = () => { showScreen(null); S.paused = false; setControls(true); };
-$('bQuit').onclick = () => { S.running = false; S.paused = false; musicStop(); showScreen('title'); setControls(false); };
-$('bRetry').onclick = () => newRun(currentSeedStr);
-$('bNew').onclick = () => { CFG.seed = ''; newRun(); };
+
+/* ---------------------------------------------------------------------
+   MENU PRINCIPAL + PAUSA + OPCIONES + CLAVE DEL MOD MENU
+   --------------------------------------------------------------------- */
+const ALL_SCREENS = ['title', 'pause', 'dead', 'opts', 'modGate', 'exitScr'];
+function showScreen(id) { for (const s of ALL_SCREENS) { const el = $(s); if (el) el.classList.toggle('on', s === id); } }
+function openPause() { if (!S.running || S.paused) return; S.paused = true; setControls(false); showScreen('pause'); }
+function closePause() { showScreen(null); S.paused = false; setControls(true); }
+
+/* CLAVE DEL MOD MENU
+   No guardamos la clave escrita en el codigo: solo su "huella" (hash). Al escribir la clave se calcula
+   su huella y se compara. (Aviso: esto es una barrera para el jugador casual. En un juego que corre
+   en el navegador, cualquiera con conocimientos puede leer o saltarse el codigo.) */
+function keyHash(s) { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h.toString(36) + '.' + s.length; }
+const MOD_KEY_HASH = 'i7309z.10';   // huella de la clave (la clave en si NO esta escrita en ningun archivo)
+let modUnlocked = false;                 // se pide la clave una vez por sesion y luego queda abierto
+let modGateFrom = 'title';               // de donde venimos: 'title' o 'pause'
+function requestMod(from) {
+  modGateFrom = from;
+  if (modUnlocked) { showScreen(null); openMod(from); return; }
+  $('modKey').value = ''; $('modKeyErr').textContent = ''; $('modKey').classList.remove('shake');
+  showScreen('modGate'); setTimeout(() => { try { $('modKey').focus(); } catch (e) {} }, 60);
+}
+function submitModKey() {
+  if (keyHash($('modKey').value.trim()) === MOD_KEY_HASH) {
+    modUnlocked = true; $('modKeyErr').textContent = ''; $('modKey').value = '';
+    showScreen(null); openMod(modGateFrom);
+  } else {
+    $('modKeyErr').textContent = 'CLAVE INCORRECTA'; sfx('hurt');
+    const k = $('modKey'); k.classList.remove('shake'); void k.offsetWidth; k.classList.add('shake'); k.value = '';
+  }
+}
+$('modKeyOk').onclick = submitModKey;
+$('modKey').addEventListener('keydown', e => { if (e.key === 'Enter') submitModKey(); });
+$('modKeyCancel').onclick = () => { $('modKey').value = ''; showScreen(modGateFrom === 'pause' ? 'pause' : 'title'); };
+
+/* OPCIONES: audio normal del jugador. Comparte el estado (CFG) con el Mod Menu, asi nunca se contradicen. */
+function optsSync() {
+  $('oSound').checked = CFG.sound; $('oMusic').checked = CFG.music;
+  $('oVol').value = CFG.volume; $('oVolV').textContent = CFG.volume.toFixed(2);
+  [['oVolMusic', 'music'], ['oVolWeapons', 'weapons'], ['oVolEnemies', 'enemies'], ['oVolPlayer', 'player'], ['oVolUi', 'ui']].forEach(([id, c]) => {
+    $(id).value = CFG.vol[c]; $(id + 'V').textContent = CFG.vol[c].toFixed(2);
+  });
+  // y el espejo inverso: el Mod Menu tambien refleja lo elegido en Opciones
+  $('mSound').checked = CFG.sound; $('mMusic').checked = CFG.music;
+  $('mVol').value = CFG.volume; $('mVolV').textContent = CFG.volume.toFixed(2);
+  [['mVolMusic', 'music'], ['mVolWeapons', 'weapons'], ['mVolEnemies', 'enemies'], ['mVolPlayer', 'player'], ['mVolUi', 'ui']].forEach(([id, c]) => {
+    $(id).value = CFG.vol[c]; $(id + 'V').textContent = CFG.vol[c].toFixed(2);
+  });
+  $('oTrack').textContent = trackLabel();
+  $('oPlayPause').textContent = AU.userPaused ? 'Reanudar musica' : 'Pausar musica';
+}
+let optsFrom = 'title';
+function openOpts(from) { optsFrom = from; optsSync(); showScreen('opts'); }
+$('oSound').onchange = () => { CFG.sound = $('oSound').checked; optsSync(); };
+$('oMusic').onchange = () => { CFG.music = $('oMusic').checked; if (!CFG.music) musicStop(); optsSync(); };
+$('oVol').oninput = () => { CFG.volume = parseFloat($('oVol').value); audioVolumeRefresh(); optsSync(); };
+[['oVolMusic', 'music'], ['oVolWeapons', 'weapons'], ['oVolEnemies', 'enemies'], ['oVolPlayer', 'player'], ['oVolUi', 'ui']].forEach(([id, c]) => {
+  $(id).oninput = () => { CFG.vol[c] = parseFloat($(id).value); audioVolumeRefresh(); optsSync(); };
+});
+$('oPlayPause').onclick = () => { AU.userPaused = !AU.userPaused; optsSync(); };
+$('oNextTrack').onclick = () => { nextTrack(); optsSync(); };
+$('oClose').onclick = () => showScreen(optsFrom === 'pause' ? 'pause' : 'title');
+// el Mod Menu tambien puede cambiar el audio: al abrirlo se sincroniza (ver openMod)
+
+/* MENU PRINCIPAL */
+$('bStart').onclick = () => startMode('infinite');
+$('bVersus').onclick = () => startMode('versus');
+$('bOnline').onclick = () => { if (typeof openOnline === 'function') openOnline(); else flashMsg('ONLINE: NO DISPONIBLE'); };
+$('bOptions').onclick = () => openOpts('title');
+$('bModT').onclick = () => requestMod('title');
+$('bExit').onclick = () => { showScreen('exitScr'); };
+$('exitBack').onclick = () => showScreen('title');
+
+/* PAUSA */
+$('bModP').onclick = () => requestMod('pause');
+$('bResume').onclick = () => closePause();
+$('bQuit').onclick = () => { S.running = false; S.paused = false; MODE = MODES.infinite; musicStop(); showScreen('title'); setControls(false); };
+$('bRetry').onclick = () => startMode(MODE.id);
+$('bNew').onclick = () => { CFG.seed = ''; startMode(MODE.id); };
 $('mClose').onclick = closeMod;
 
 function bindCheck(id, key) { const el = $(id); el.checked = CFG[key]; el.onchange = () => { CFG[key] = el.checked; updateWeaponHUD(); }; }
