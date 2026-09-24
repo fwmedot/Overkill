@@ -143,3 +143,12 @@ h2 { margin: 0 0 12px; color: var(--iron); font-size: 22px; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
+
+/* ---------- NUEVO: FUEGO (medidor de agresividad) ---------- */
+#fireBox { position: absolute; left: max(12px, env(safe-area-inset-left)); top: 84px; width: min(34vw, 260px); }
+#fireL { font-size: 13px; font-weight: bold; letter-spacing: 2px; min-height: 16px; color: var(--furnace); text-shadow: 1px 1px 0 #000; transition: transform .12s; }
+#fireL.pop { transform: scale(1.25); transform-origin: left center; }
+#fireBar { height: 7px; background: #1a0d0b; border: 2px solid var(--bone); box-shadow: 2px 2px 0 #000; overflow: hidden; }
+#fireBar i { display: block; height: 100%; width: 0; background: linear-gradient(90deg, #ff6a1a, #ffc933); transition: width .1s; }
+/* brillo en los bordes de la pantalla: mas fuerte cuanto mas FUEGO */
+#fireGlow { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity .3s, box-shadow .3s; }

@@ -16,7 +16,7 @@ Tu juego ahora esta dividido en archivos. Antes era uno solo enorme. Asi es much
 | `game.js` | El **motor** del juego (movimiento, enemigos, oleadas) | Solo valores sueltos |
 | `audio-config.js` | La **lista de sonidos y musica** | Si quieres cambiar nombres |
 | carpeta `audio/music/` | Aqui va tu **musica** | **SI, la mas comun** |
-| carpeta `audio/sfx/` | Aqui van tus **efectos de sonido** | **SI, la mas comun** |
+| carpeta `audio/sfx/` | Aqui van tus **efectos de sonido**, ordenados en subcarpetas (`weapons`, `enemies`, `player`, `environment`, `ui`) | **SI, la mas comun** |
 | carpeta `images/` | Para futuras imagenes | Cuando las necesites |
 
 **Regla de oro:** si solo quieres cambiar musica o sonidos, **NO necesitas tocar ningun archivo de codigo**. Solo subes archivos de audio a las carpetas.
@@ -45,7 +45,7 @@ Tu juego ahora esta dividido en archivos. Antes era uno solo enorme. Asi es much
 Veras una pagina con instrucciones raras. **Ignorala**. Busca la frase pequena que dice **"uploading an existing file"** y pulsa ese enlace azul.
 
 1. Abre la carpeta `hellrush` que te entrego en tu computadora.
-2. **Selecciona TODO su contenido** (no la carpeta en si, lo que hay DENTRO): `index.html`, `style.css`, `game.js`, `audio-config.js`, `GUIA-PARA-PRINCIPIANTES.md` y las carpetas `audio` e `images`.
+2. **Selecciona TODO su contenido** (no la carpeta en si, lo que hay DENTRO): `index.html`, `style.css`, `game.js`, `audio-config.js`, `GUIA-PARA-PRINCIPIANTES.md`, `GUIA_AUDIO.md` y las carpetas `audio` e `images`.
 3. **Arrastralo** todo a la zona de GitHub que dice "Drag files here".
 4. Espera a que termine de cargar (veras la lista de archivos).
 5. Abajo, en el cuadro **Commit changes**, escribe: `Primera version`
@@ -87,130 +87,17 @@ GitHub puede convertir tu repositorio en una pagina web que cualquiera puede abr
 
 ## PARTE 3: CAMBIAR LA MUSICA Y LOS SONIDOS
 
-### Como funciona (version simple)
-El juego busca archivos con **nombres exactos** en las carpetas de audio.
-- Si encuentra el archivo, **lo usa**.
-- Si no lo encuentra, usa su sonido interno de siempre.
+**Toda la explicacion del audio esta ahora en su propia guia: `GUIA_AUDIO.md`** (esta en la misma carpeta que este archivo).
 
-**Por eso puedes subir solo los que quieras.** No hace falta subirlos todos.
+Ahi encontraras:
+- La **lista completa** de los 27 archivos de audio (3 musicas + 24 efectos), con el nombre exacto de cada uno.
+- En que **carpeta** va cada uno (`weapons`, `enemies`, `player`, `environment`, `ui`).
+- **Cuando suena** cada sonido.
+- Como **reemplazarlos desde GitHub** paso a paso.
+- Como cambiar el **volumen** (5 controles) y la **musica de una oleada concreta**.
+- Que hacer si **no suena** tu archivo.
 
-### Formatos aceptados
-- **MP3** (recomendado para musica)
-- **OGG** o **WAV** (buenos para efectos cortos)
-
-> Si tu archivo tiene otro formato (por ejemplo `.wav`), tienes que decirselo al juego. Ver "Paso 3.4".
-
-### Paso 3.1: TABLA DE NOMBRES DE ARCHIVO
-
-Estos son los nombres **exactos**. Respeta mayusculas, minusculas y guiones.
-
-#### MUSICA, va en la carpeta `audio/music/`
-| Nombre del archivo | Cuando suena |
-|---|---|
-| `musica-batalla.mp3` | Durante toda la partida (en bucle) |
-| `musica-jefe.mp3` | Solo durante el combate contra el jefe |
-
-#### EFECTOS, van en la carpeta `audio/sfx/`
-
-**Armas:**
-| Nombre | Cuando suena |
-|---|---|
-| `disparo-revolver.mp3` | Disparas el revolver |
-| `disparo-escopeta.mp3` | Disparas la escopeta |
-| `disparo-riel.mp3` | Disparas el riel |
-| `disparo-clavos.mp3` | Disparas la de clavos |
-
-**Impactos y muertes:**
-| Nombre | Cuando suena |
-|---|---|
-| `impacto-enemigo.mp3` | Le pegas a un enemigo |
-| `muerte-enemigo.mp3` | Matas un enemigo normal |
-| `muerte-enemigo-grande.mp3` | Matas un bruto o un jefe |
-| `explosion.mp3` | Explosiones y golpe fuerte al suelo |
-| `parry.mp3` | Devuelves un proyectil |
-
-**Enemigos:**
-| Nombre | Cuando suena |
-|---|---|
-| `disparo-enemigo.mp3` | Un enemigo dispara |
-| `aviso-ataque.mp3` | Pitido antes de que ataque un enemigo |
-| `rugido-jefe.mp3` | Aparece el jefe |
-
-**Jugador:**
-| Nombre | Cuando suena |
-|---|---|
-| `jugador-herido.mp3` | Recibes dano |
-| `jugador-muere.mp3` | Mueres |
-| `lava.mp3` | Caes en la lava |
-| `salto.mp3` | Saltas |
-| `dash.mp3` | Haces dash |
-| `deslizar.mp3` | Te deslizas |
-
-**Gancho:**
-| Nombre | Cuando suena |
-|---|---|
-| `gancho-lanzar.mp3` | Lanzas el gancho |
-| `gancho-clavar.mp3` | El gancho se clava en algo |
-
-**Juego e interfaz:**
-| Nombre | Cuando suena |
-|---|---|
-| `recoger-item.mp3` | Recoges vida, municion o dash |
-| `nueva-oleada.mp3` | Empieza una oleada |
-| `subir-rango.mp3` | Subes de rango (D, C, B...) |
-| `boton.mp3` | Pulsas un boton de un menu |
-
-### Paso 3.2: REEMPLAZAR UN SONIDO O CANCION (paso a paso)
-
-Ejemplo: quieres cambiar el sonido del **salto**.
-
-1. Consigue tu sonido y **renombralo** a `salto.mp3` (exactamente asi).
-2. Entra a **github.com** y abre tu repositorio `hellrush`.
-3. Pulsa la carpeta **audio**.
-4. Pulsa la carpeta **sfx**.
-5. Arriba a la derecha pulsa **Add file** y luego **Upload files**.
-6. Arrastra tu `salto.mp3` a la zona de subida.
-7. Abajo, en **Commit changes**, escribe: `Nuevo sonido de salto`
-8. Pulsa el boton verde **Commit changes**.
-9. Espera 1 o 2 minutos y abre el juego. Ya suena tu nuevo sonido.
-
-> Si ya existia un `salto.mp3`, **se reemplaza solo**. No tienes que borrar nada.
-
-### Paso 3.3: CAMBIAR LA MUSICA
-Igual que el paso anterior, pero en la carpeta `audio/music/` y con el nombre `musica-batalla.mp3`.
-
-> **Consejo:** para musica usa MP3 de maximo 3 a 5 MB. Si es muy pesado, el juego tarda en cargar.
-
-### Paso 3.4: SI TU ARCHIVO NO ES MP3 (usar .wav u .ogg)
-Si tu archivo es, por ejemplo, `disparo-revolver.wav`, tienes que decirselo al juego:
-
-1. En tu repositorio, pulsa el archivo **audio-config.js**.
-2. Pulsa el **icono del lapiz** (arriba a la derecha, "Edit this file").
-3. Usa **Ctrl+F** (en el telefono, el buscador del navegador) y busca: `disparo-revolver.mp3`
-4. Veras esta linea:
-   ```
-   pistol:    "audio/sfx/disparo-revolver.mp3",
-   ```
-5. Cambia **solo** `.mp3` por `.wav`:
-   ```
-   pistol:    "audio/sfx/disparo-revolver.wav",
-   ```
-6. Arriba a la derecha pulsa **Commit changes...**
-7. En el cuadro que aparece, pulsa el boton verde **Commit changes**.
-
-> **Cuidado:** no borres las comillas `"` ni la coma `,` del final.
-
-### Paso 3.5: CAMBIAR EL VOLUMEN DE UN SONIDO O DE LA MUSICA
-1. Abre `audio-config.js` y pulsa el lapiz para editar.
-2. Busca el bloque que dice `volume:`
-3. Cambia los numeros. **0 = silencio, 1 = maximo**.
-   ```
-   volume: {
-     music: 0.6,     <- volumen de la musica
-     sfx:   1.0      <- volumen de los efectos
-   },
-   ```
-4. Pulsa **Commit changes...** y luego **Commit changes**.
+**Resumen de una linea:** sube tu archivo con el **mismo nombre exacto** a su carpeta de `audio/` y reemplaza al anterior, sin tocar codigo.
 
 ---
 
@@ -295,7 +182,7 @@ Casi todo lo ajustable esta en un solo bloque, cerca del inicio de `game.js`.
 
 ## PARTE 7: RESUMEN DE 30 SEGUNDOS
 
-- **Cambiar musica o sonidos:** sube un archivo con el nombre exacto a `audio/music/` o `audio/sfx/`. Sin tocar codigo.
+- **Cambiar musica o sonidos:** sube un archivo con el nombre exacto a su carpeta de `audio/`. Sin tocar codigo. Mira `GUIA_AUDIO.md`.
 - **Cambiar colores:** edita `style.css`.
 - **Cambiar dificultad o velocidad:** edita el bloque `const CFG` en `game.js`, o usa el boton MOD.
 - **Algo se rompio:** GitHub guarda todo, usa **History** para volver atras.

@@ -939,7 +939,10 @@ function spawnEnemy(type, pos) {
   const built = BUILDERS[type]();
   const root = new THREE.Group();
   root.add(built.g);
-  root.position.copy(pos); root.position.y = d.size[1] / 2 + 0.05;
+  root.position.copy(pos);
+  // Si nos dan una altura valida (pickSpawnPoint ya la calcula sobre el suelo real) la respetamos.
+  // ANTES se forzaba siempre a la altura del suelo base, y los enemigos nacian dentro de plataformas.
+  if (!(pos.y > d.size[1] / 2)) root.position.y = d.size[1] / 2 + 0.05;
   built.g.position.y = -d.size[1] / 2;
   scene.add(root);
   const e = {
@@ -979,7 +982,7 @@ function killEnemy(e) {
   sparks(center, e.d.heavy ? 18 : 10, 0xffe08a);
   screenPunch(e.d.heavy ? 0.55 : 0.22);
   S.kills++; S.style = Math.min(S.style + 1, 12); S.styleT = 4;
-  S.score += Math.round(e.d.score * S.mult);
+  S.score += Math.round(e.d.score * S.mult * fireMult());
   const now = S.time;
   addStyle('BAJA', 22);
   if (!P.onGround && !hook.state) { addStyle('AEREO', 30); S.airKills++; }
@@ -989,13 +992,19 @@ function killEnemy(e) {
   S.lastKillT = now;
   if (e.d.boss) { addStyle('JEFE', 200); }
   if (e.exploded) addStyle('EXPLOSIVO', 40);
+  fireOnKill(e);
   P.hp = Math.min(100, P.hp + (e.d.heavy ? 14 : 6));
   P.shake = Math.max(P.shake || 0, e.d.heavy ? 0.6 : 0.25);
   hitStop = e.d.heavy ? 0.12 : 0.035;
   sfx(e.d.heavy ? 'bigKill' : 'kill');
   maybeDrop(center, e);
   if (e.type === 'bomber') { e.exploded = true; explode(center, 6, 30, e); }
-  if (e.d.boss) { bossActive = false; flashMsg('\u00a1JEFE DERROTADO!'); $('bossBar').classList.remove('on'); }
+  if (e.d.boss) {
+    // ARREGLADO: en oleadas con 2+ jefes, matar uno no debe apagar la barra ni la musica de jefe si queda otro vivo.
+    const otherBoss = enemies.some(o => o !== e && o.d.boss);
+    if (!otherBoss) { bossActive = false; $('bossBar').classList.remove('on'); }
+    flashMsg(otherBoss ? '\u00a1UN JEFE MENOS!' : '\u00a1JEFE DERROTADO!');
+  }
   haptic(25);
   killPopup(center, e.d.score);
 }
@@ -1091,6 +1100,37 @@ function animateEnemy(e, dt, speedH) {
 /* Tinte blanco-rojizo cuando el enemigo recibe dano (flash). */
 function tintEnemy(e, on) {
   e.model.g.traverse(o => { if (o.isMesh && o.material && o.material.color) { if (on) { if (o.userData.c0 === undefined) o.userData.c0 = o.material.color.getHex(); o.material.color.setHex(0xff8080); } else if (o.userData.c0 !== undefined) o.material.color.setHex(o.userData.c0); } });
+}
+
+/* NUEVO - CONCIENCIA DEL BORDE
+   Los enemigos terrestres miran un poco por delante de ellos. Si no hay suelo
+   (hay lava o un vacio), en vez de caminar al abismo se desvian hacia un lado
+   y rodean el borde. Asi no se suicidan solos y de verdad te persiguen.
+   Devuelve true si hay suelo firme en ese punto. */
+function groundAhead(x, z, fromY) {
+  const fy = world.floorY(x, z);
+  return fy > world.lavaY + 0.5 && fy > fromY - 3.5;   // hay suelo y no es una caida enorme
+}
+function steerAwayFromEdge(e, p) {
+  // Solo enemigos que caminan por el suelo. Los que saltan/cargan tienen su propio movimiento.
+  if (!e.grounded) return;
+  if (e.type === 'imp' && e.state !== 0) return;
+  if (e.type === 'charger' && e.state === 2) return;
+  if (e.d.boss) return;
+  const vx = e.vel.x, vz = e.vel.z, sp = Math.hypot(vx, vz);
+  if (sp < 0.5) return;
+  const dx = vx / sp, dz = vz / sp;
+  const look = 1.6 + sp * 0.22;                  // mira mas lejos cuanto mas rapido va
+  const feet = p.y - e.d.hit[1] / 2;
+  if (groundAhead(p.x + dx * look, p.z + dz * look, feet)) return;   // todo bien: hay suelo
+  // No hay suelo delante: probamos girar a ambos lados y elegimos el que tenga suelo
+  for (const ang of [0.9, -0.9, 1.6, -1.6]) {
+    const c = Math.cos(ang), s = Math.sin(ang);
+    const rx = dx * c - dz * s, rz = dx * s + dz * c;
+    if (groundAhead(p.x + rx * look, p.z + rz * look, feet)) { e.vel.x = rx * sp; e.vel.z = rz * sp; return; }
+  }
+  e.vel.x = 0; e.vel.z = 0;                       // sin salida: se queda quieto en el borde
+  e.edgeWait = 0.5;
 }
 
 function updateEnemies(dt) {
@@ -1197,6 +1237,7 @@ function updateEnemies(dt) {
       }
     }
 
+    steerAwayFromEdge(e, p);   // NUEVO: no caminar hacia el vacio
     const sx = e.d.hit[0] / 2, sy = e.d.hit[1];
     p.x += e.vel.x * dt;
     for (const b of world.boxes) if (overlapBox(p.x, p.y - sy / 2, p.z, sx, sy, b)) { p.x -= e.vel.x * dt; e.vel.x = 0; break; }
@@ -1207,7 +1248,11 @@ function updateEnemies(dt) {
       if (e.vel.y <= 0) { p.y = b.maxY + sy / 2 + 0.001; e.grounded = true; }
       e.vel.y = 0;
     }
-    if (e.grounded && !CFG.passive && (Math.abs(e.vel.x) + Math.abs(e.vel.z)) < 0.3 && dist > 3 && e.type !== 'shooter') e.vel.y = 12;
+    if (e.grounded && !CFG.passive && (Math.abs(e.vel.x) + Math.abs(e.vel.z)) < 0.3 && dist > 3 && e.type !== 'shooter') {
+      // NUEVO: solo salta para superar un obstaculo si al otro lado hay suelo (antes saltaba a ciegas y caia a la lava)
+      const ahead = groundAhead(p.x + toP.x * 3, p.z + toP.z * 3, p.y - sy / 2);
+      if (ahead) e.vel.y = 12;
+    }
 
     animateEnemy(e, dt, Math.hypot(e.vel.x, e.vel.z));
 
@@ -1463,13 +1508,33 @@ function killPopup(worldPos, pts) {
    Tu NO necesitas tocar este archivo para cambiar sonidos.
    Solo reemplaza los archivos en la carpeta audio/ (ver GUIA).
    ===================================================================== */
-const AU = { ctx: null, master: null, sfxBus: null, musicBus: null, noiseBuf: null, musicOn: true, musicT: 0, step: 0, ok: true,
-             buffers: {},        // sonidos cargados desde archivos (nombre -> audio)
+const AU = { ctx: null, master: null, sfxBus: null, ok: true, noiseBuf: null, musicT: 0, step: 0,
+             bus: {},            // un "bus" de volumen por categoria: music, weapons, enemies, player, ui
+             buffers: {},        // efectos cargados desde archivo: nombre -> audio decodificado
              loading: false, loaded: false,
-             musicEl: null,      // elemento <audio> de la musica de fondo
-             musicName: null,    // que pista suena ahora ('battle' o 'boss')
-             musicFile: {} };    // que pistas de musica existen de verdad
-const AUCFG = window.HELLRUSH_AUDIO || { music: {}, sfx: {}, volume: { music: 0.6, sfx: 1 } };
+             tracks: {},         // capas de musica: calm / battle / boss (cada una con su <audio> y su volumen)
+             musicFile: {},      // que capas existen de verdad como archivo
+             musicWaveKey: null, // ruta de la cancion "battle" que esta sonando (para el cambio por oleada)
+             curCat: 'ui' };     // categoria del sonido que se esta creando (la usan los sonidos internos)
+const AUCFG = window.HELLRUSH_AUDIO || { music: {}, musicByWave: {}, sfx: {}, volume: {} };
+const AU_CATS = ['music', 'weapons', 'enemies', 'player', 'ui'];
+/* Volumen de cada categoria. Empieza con el valor de audio-config.js y el jugador
+   lo puede cambiar en MOD MENU. Se guarda en CFG.vol para que el menu lo controle. */
+CFG.vol = {};
+for (const c of AU_CATS) CFG.vol[c] = (AUCFG.volume && AUCFG.volume[c] != null) ? AUCFG.volume[c] : 1;
+
+/* A que categoria pertenece cada sonido. Sale de audio-config.js (el 1er elemento de cada linea).
+   Si un sonido no esta en la config usa 'ui'. */
+function catOf(name) {
+  const e = AUCFG.sfx && AUCFG.sfx[name];
+  if (Array.isArray(e) && e[0]) return e[0];
+  return 'ui';
+}
+function urlOf(name) {
+  const e = AUCFG.sfx && AUCFG.sfx[name];
+  if (Array.isArray(e)) return e[1] || '';
+  return typeof e === 'string' ? e : '';   // compatible con el formato viejo: nombre: "ruta"
+}
 
 function audioInit() {
   if (AU.ctx || !AU.ok) return;
@@ -1481,8 +1546,10 @@ function audioInit() {
     const comp = AU.ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 6;
     AU.master.connect(comp); comp.connect(AU.ctx.destination);
-    AU.sfxBus = AU.ctx.createGain(); AU.sfxBus.gain.value = (AUCFG.volume && AUCFG.volume.sfx != null) ? AUCFG.volume.sfx : 1;
-    AU.sfxBus.connect(AU.master);
+    for (const c of AU_CATS) {
+      const g = AU.ctx.createGain(); g.gain.value = CFG.vol[c]; g.connect(AU.master); AU.bus[c] = g;
+    }
+    AU.sfxBus = AU.bus.ui;   // por si algun codigo viejo aun usa sfxBus
     const len = AU.ctx.sampleRate * 1;
     AU.noiseBuf = AU.ctx.createBuffer(1, len, AU.ctx.sampleRate);
     const d = AU.noiseBuf.getChannelData(0); for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
@@ -1490,31 +1557,55 @@ function audioInit() {
   } catch (e) { AU.ok = false; }
 }
 function audioResume() { audioInit(); if (AU.ctx && AU.ctx.state === 'suspended') AU.ctx.resume(); }
+/* Aplica los volumenes actuales (los del MOD MENU) a los buses. */
+function audioVolumeRefresh() {
+  if (!AU.ctx) return;
+  AU.master.gain.value = CFG.volume;
+  for (const c of AU_CATS) if (AU.bus[c]) AU.bus[c].gain.value = CFG.vol[c];
+}
 
-/* Carga los archivos de efectos. Si uno no existe (error 404) simplemente
-   se ignora y ese sonido usara la version interna. NUNCA lanza error visible. */
+/* Carga los efectos. Si un archivo no existe (error 404) se ignora y ese sonido
+   usara la version interna. NUNCA muestra error al jugador. */
 function loadAudioFiles() {
   if (AU.loading || AU.loaded) return;
   AU.loading = true;
   const list = AUCFG.sfx || {};
+  /* Si el archivo no esta en su subcarpeta nueva (ej. audio/sfx/weapons/x.mp3), probamos la ruta
+     ANTIGUA (audio/sfx/x.mp3). Asi, si ya subiste archivos con la organizacion vieja, siguen sonando. */
+  const legacyUrl = u => u.replace(/^(audio\/sfx)\/(?:weapons|enemies|player|environment|ui)\//, '$1/');
+  const fetchAudio = url => fetch(url).then(r => {
+    if (r.ok) return r;
+    const old = legacyUrl(url);
+    if (old !== url) return fetch(old).then(r2 => { if (!r2.ok) throw new Error('no existe'); return r2; });
+    throw new Error('no existe');
+  });
   const jobs = Object.keys(list).map(name => {
-    const url = list[name];
+    const url = urlOf(name);
     if (!url) return Promise.resolve();
-    return fetch(url)
-      .then(r => { if (!r.ok) throw new Error('no existe'); return r.arrayBuffer(); })
-      .then(buf => new Promise((res, rej) => AU.ctx.decodeAudioData(buf, res, rej)))
+    return fetchAudio(url)
+      .then(r => r.arrayBuffer())
+      // Solo la forma de promesa: con callbacks + promesa a la vez, un archivo roto lanzaba un error sin capturar.
+      .then(buf => AU.ctx.decodeAudioData(buf))
       .then(audio => { AU.buffers[name] = audio; })
-      .catch(() => { /* archivo ausente o roto: se usa el sonido interno */ });
+      .catch(() => { /* ausente o roto: se usa el sonido interno */ });
   });
   Promise.all(jobs).then(() => { AU.loaded = true; AU.loading = false; });
-  // Musica: comprobamos cuales de las pistas existen de verdad
+  // Musica: capas calm/battle/boss + canciones por oleada. Solo comprobamos cuales existen.
+  const probe = (key, url) => {
+    if (!url) return;
+    fetch(url, { method: 'HEAD' }).then(r => {
+      if (!r.ok) return;
+      // Comprobamos que el navegador puede leerlo de verdad (un archivo corrupto responde 'ok' igualmente)
+      const probeEl = new Audio(); probeEl.preload = 'metadata';
+      probeEl.addEventListener('loadedmetadata', () => { AU.musicFile[key] = url; });
+      probeEl.addEventListener('error', () => {});
+      probeEl.src = url;
+    }).catch(() => {});
+  };
   const mus = AUCFG.music || {};
-  Object.keys(mus).forEach(name => {
-    if (!mus[name]) return;
-    fetch(mus[name], { method: 'HEAD' })
-      .then(r => { if (r.ok) AU.musicFile[name] = mus[name]; })
-      .catch(() => {});
-  });
+  Object.keys(mus).forEach(n => probe(n, mus[n]));
+  const byWave = AUCFG.musicByWave || {};
+  Object.keys(byWave).forEach(w => probe('wave' + w, byWave[w]));
 }
 
 /* Reproduce un efecto desde archivo. Devuelve true si lo logro. */
@@ -1522,45 +1613,75 @@ function playBuffer(name) {
   const b = AU.buffers[name];
   if (!b || !AU.ctx) return false;
   const s = AU.ctx.createBufferSource(); s.buffer = b;
-  // pequena variacion de tono para que los sonidos repetidos no suenen identicos
-  s.playbackRate.value = 0.96 + Math.random() * 0.08;
-  s.connect(AU.sfxBus); s.start();
+  s.playbackRate.value = 0.96 + Math.random() * 0.08;   // variacion de tono para que no suenen identicos
+  s.connect(AU.bus[catOf(name)] || AU.bus.ui); s.start();
   return true;
 }
 
-/* --- MUSICA DE ARCHIVO --- */
-function musicPlay(name) {
-  const url = AU.musicFile[name];
-  if (!url) return false;
-  if (AU.musicName === name && AU.musicEl && !AU.musicEl.paused) return true;
-  musicStop();
-  const el = new Audio(url);
-  el.loop = true;
-  const vol = (AUCFG.volume && AUCFG.volume.music != null) ? AUCFG.volume.music : 0.6;
-  el.volume = clamp(vol * CFG.volume, 0, 1);
-  el.play().catch(() => {});
-  AU.musicEl = el; AU.musicName = name;
-  return true;
+/* --- MUSICA EN CAPAS CON TRANSICION SUAVE ---
+   Cada capa (calm / battle / boss) es un <audio> en bucle conectado a su propio
+   volumen. Todas suenan a la vez en silencio; solo se sube la que corresponde y
+   se baja la demas poco a poco (crossfade). Asi los cambios nunca son bruscos. */
+function trackGet(key) {
+  const url = AU.musicFile[key];
+  if (!url) return null;
+  let t = AU.tracks[key];
+  if (t && t.url === url) return t;
+  if (t) { try { t.el.pause(); } catch (e) {} }
+  const el = new Audio(url); el.loop = true; el.preload = 'auto';
+  // Si el archivo esta roto o no es audio, lo descartamos: asi el juego usa la musica interna en vez de quedarse mudo.
+  el.addEventListener('error', () => { delete AU.musicFile[key]; if (AU.tracks[key]) { try { el.pause(); } catch (e) {} delete AU.tracks[key]; } });
+  const g = AU.ctx.createGain(); g.gain.value = 0;
+  try { AU.ctx.createMediaElementSource(el).connect(g); g.connect(AU.bus.music); }
+  catch (e) { return null; }
+  t = AU.tracks[key] = { key, url, el, g, cur: 0, playing: false };
+  return t;
+}
+/* Que capa deberia sonar ahora mismo y con que "key" de archivo. */
+function musicWanted() {
+  if (bossActive) return AU.musicFile.boss ? 'boss' : null;
+  const wk = 'wave' + S.wave;
+  const combatKey = AU.musicFile[wk] ? wk : 'battle';
+  const inFight = S.waveState === 'active' || S.waveState === 'spawning';
+  // Margen de gracia: la musica NO vuelve a "calma" hasta llevar ~4 s sin combate.
+  // (La pausa entre oleadas es corta; sin esto la musica oscilaria sin parar.)
+  if (inFight) AU.lastFightT = S.time;
+  const recentlyFought = S.time - (AU.lastFightT === undefined ? -99 : AU.lastFightT) < 4;
+  if ((inFight || recentlyFought) && AU.musicFile[combatKey]) return combatKey;
+  if (AU.musicFile.calm) return 'calm';
+  return AU.musicFile[combatKey] ? combatKey : null;   // sin capa calma: se usa la de combate siempre
+}
+function musicFadeStep(dt, wanted) {
+  let any = false;
+  for (const key of Object.keys(AUCFG.music || {}).concat(Object.keys(AUCFG.musicByWave || {}).map(w => 'wave' + w))) {
+    if (!AU.musicFile[key]) continue;
+    const t = trackGet(key); if (!t) continue;
+    const target = key === wanted ? 1 : 0;
+    // subir rapido (1.2 s) y bajar un poco mas lento (1.6 s) para que se solapen bien
+    const rate = target > t.cur ? dt / 1.2 : dt / 1.6;
+    t.cur = clamp(t.cur + Math.sign(target - t.cur) * Math.min(Math.abs(target - t.cur), rate), 0, 1);
+    t.g.gain.value = t.cur;
+    if (t.cur > 0.001 && !t.playing) { t.el.play().catch(() => {}); t.playing = true; }
+    else if (t.cur <= 0.001 && t.playing && target === 0) { try { t.el.pause(); } catch (e) {} t.playing = false; }
+    if (t.playing) any = true;
+  }
+  return any;
 }
 function musicStop() {
-  if (AU.musicEl) { try { AU.musicEl.pause(); } catch (e) {} AU.musicEl = null; }
-  AU.musicName = null;
+  for (const k of Object.keys(AU.tracks)) { const t = AU.tracks[k]; try { t.el.pause(); } catch (e) {} t.playing = false; t.cur = 0; if (t.g) t.g.gain.value = 0; }
 }
-function musicVolumeRefresh() {
-  if (AU.musicEl) {
-    const vol = (AUCFG.volume && AUCFG.volume.music != null) ? AUCFG.volume.music : 0.6;
-    AU.musicEl.volume = clamp(vol * CFG.volume, 0, 1);
-  }
-}
+function musicVolumeRefresh() { audioVolumeRefresh(); }
 
-/* --- SONIDOS FABRICADOS POR CODIGO (respaldo si no hay archivo) --- */
+/* --- SONIDOS FABRICADOS POR CODIGO (respaldo si no hay archivo) ---
+   Van al bus de su categoria (armas, enemigos...) para que los volumenes tambien les afecten. */
+function outBus() { return AU.bus[AU.curCat] || AU.bus.ui; }
 function sfxTone(f0, f1, dur, type = 'square', vol = 0.3, delay = 0) {
   if (!AU.ctx) return;
   const t = AU.ctx.currentTime + delay;
   const o = AU.ctx.createOscillator(), g = AU.ctx.createGain();
   o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
   g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  o.connect(g); g.connect(AU.sfxBus); o.start(t); o.stop(t + dur + 0.02);
+  o.connect(g); g.connect(outBus()); o.start(t); o.stop(t + dur + 0.02);
 }
 function sfxNoise(dur, freq, q, vol = 0.3, type = 'lowpass', delay = 0, sweepTo) {
   if (!AU.ctx) return;
@@ -1569,8 +1690,9 @@ function sfxNoise(dur, freq, q, vol = 0.3, type = 'lowpass', delay = 0, sweepTo)
   const f = AU.ctx.createBiquadFilter(); f.type = type; f.Q.value = q;
   f.frequency.setValueAtTime(freq, t); if (sweepTo) f.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
   const g = AU.ctx.createGain(); g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-  s.connect(f); f.connect(g); g.connect(AU.sfxBus); s.start(t); s.stop(t + dur + 0.02);
+  s.connect(f); f.connect(g); g.connect(outBus()); s.start(t); s.stop(t + dur + 0.02);
 }
+
 const SFX = {
   pistol()  { sfxNoise(0.12, 3200, 1, 0.35, 'bandpass', 0, 700); sfxTone(420, 90, 0.14, 'square', 0.22); },
   shotgun() { sfxNoise(0.32, 1800, 0.7, 0.6, 'lowpass', 0, 200); sfxTone(150, 40, 0.28, 'sawtooth', 0.4); },
@@ -1597,42 +1719,46 @@ const SFX = {
   button()  { sfxTone(520, 380, 0.06, 'square', 0.14); },
   death()   { sfxTone(400, 30, 1.4, 'sawtooth', 0.5); sfxNoise(1.4, 800, 0.6, 0.4, 'lowpass', 0, 40); }
 };
-/* Funcion central de sonido: primero intenta el ARCHIVO, si no hay usa el interno. */
+/* Funcion central de sonido: primero intenta el ARCHIVO, si no hay usa el interno.
+   Marca la categoria antes de crear el sonido interno para que use el volumen correcto. */
 function sfx(name) {
   if (!CFG.sound || !AU.ctx) return;
   try {
     if (playBuffer(name)) return;
-    if (SFX[name]) SFX[name]();
+    if (SFX[name]) { AU.curCat = catOf(name); SFX[name](); }
   } catch (e) {}
 }
 
+/* --- MUSICA DINAMICA ---
+   Decide que capa suena (calma / combate / jefe / cancion por oleada) y hace
+   la transicion suave. Si NO hay ningun archivo de musica, suena la musica
+   interna de siempre, que ademas se intensifica con tu estilo. */
 const BASS = [55, 55, 82.4, 55, 65.4, 55, 73.4, 82.4];
 function updateMusic(dt) {
-  if (!AU.ctx || !S.running || S.paused) { if (AU.musicEl && (S.paused || !S.running)) { try { AU.musicEl.pause(); } catch (e) {} } return; }
+  if (!AU.ctx) return;
+  const playing = S.running && !S.paused;
+  if (!playing) { for (const k of Object.keys(AU.tracks)) { const t = AU.tracks[k]; if (t.playing) { try { t.el.pause(); } catch (e) {} t.playing = false; } } return; }
   if (!CFG.music) { musicStop(); return; }
-  // Si hay una cancion de archivo, la usamos (batalla o jefe) y NO fabricamos la musica interna.
-  const want = bossActive && AU.musicFile.boss ? 'boss' : 'battle';
-  if (AU.musicFile[want]) {
-    if (AU.musicName !== want || !AU.musicEl) musicPlay(want);
-    else if (AU.musicEl.paused) AU.musicEl.play().catch(() => {});
-    musicVolumeRefresh();
-    return;
-  }
-  // Respaldo: musica fabricada por codigo (la de siempre)
+  const wanted = musicWanted();
+  if (wanted) { musicFadeStep(dt, wanted); return; }
+  // Sin archivos de musica: musica interna fabricada por codigo (la de siempre)
+  musicFadeStep(dt, null);
+  AU.curCat = 'music';
   AU.musicT -= dt;
   const inten = clamp(S.style / 12, 0, 1) + (bossActive ? 0.5 : 0);
   const stepLen = 0.15 - inten * 0.03;
   if (AU.musicT > 0) return;
   AU.musicT = stepLen;
   const i = AU.step++ % 16;
-  if (i % 4 === 0) { sfxTone(120, 40, 0.16, 'sine', 0.55 * CFG.musicVol); }
-  if (i % 8 === 4) { sfxNoise(0.14, 2200, 1, 0.3 * CFG.musicVol, 'bandpass'); }
-  if (i % 2 === 1 && inten > 0.25) { sfxNoise(0.03, 8000, 1, 0.1 * CFG.musicVol, 'highpass'); }
+  const mv = 1;   // el volumen de la musica interna lo controla el bus "music"
+  if (i % 4 === 0) { sfxTone(120, 40, 0.16, 'sine', 0.55 * mv); }
+  if (i % 8 === 4) { sfxNoise(0.14, 2200, 1, 0.3 * mv, 'bandpass'); }
+  if (i % 2 === 1 && inten > 0.25) { sfxNoise(0.03, 8000, 1, 0.1 * mv, 'highpass'); }
   if (i % 2 === 0) {
     const n = BASS[(i / 2 + (S.wave % 2 ? 0 : 2)) % BASS.length | 0] * (inten > 0.6 ? 2 : 1);
-    sfxTone(n, n * 0.98, stepLen * 1.7, 'sawtooth', 0.16 * CFG.musicVol);
+    sfxTone(n, n * 0.98, stepLen * 1.7, 'sawtooth', 0.16 * mv);
   }
-  if (inten > 0.5 && i % 4 === 2) sfxTone(BASS[i % 8] * 4, BASS[i % 8] * 4, stepLen, 'square', 0.05 * CFG.musicVol);
+  if (inten > 0.5 && i % 4 === 2) sfxTone(BASS[i % 8] * 4, BASS[i % 8] * 4, stepLen, 'square', 0.05 * mv);
 }
 ['touchstart', 'mousedown', 'keydown'].forEach(ev => addEventListener(ev, audioResume, { passive: true }));
 
@@ -1649,13 +1775,111 @@ const RANKS = [
   { n: '', m: 1, need: 0 }, { n: 'D', m: 1.0, need: 30 }, { n: 'C', m: 1.2, need: 70 }, { n: 'B', m: 1.5, need: 120 },
   { n: 'A', m: 2.0, need: 180 }, { n: 'S', m: 2.5, need: 250 }, { n: 'SS', m: 3.0, need: 330 }, { n: 'ULTRAKILL', m: 4.0, need: 420 }
 ];
+/* =====================================================================
+   NUEVO - SISTEMA "FUEGO"  (tu propio sistema de combate agresivo)
+   =====================================================================
+   El FUEGO es una barra de 0 a 100 que mide lo AGRESIVO que juegas.
+   - SUBE cuando: matas rapido, cambias de arma entre bajas, te mueves a
+     gran velocidad, matas en el aire, y aguantas sin recibir dano.
+   - BAJA cuando: te quedas quieto, te hacen dano, o pasas tiempo sin matar.
+   Segun el FUEGO ganas un multiplicador EXTRA de puntos (se suma al de tu
+   rango de estilo). Todos los numeros estan aqui abajo para que los cambies.
+   ===================================================================== */
+const FIRE = {
+  max: 100,
+  decayIdle: 8,        // cuanto baja por segundo si no haces nada agresivo
+  decayHit: 35,        // cuanto se pierde de golpe al recibir dano
+  perKill: 3,          // subida base por baja
+  quickKillBonus: 4,   // extra si la baja llega < 1.2 s despues de la anterior
+  weaponSwapBonus: 5,  // extra si matas con un arma distinta a la de la baja anterior
+  airBonus: 3,         // extra por baja en el aire
+  speedGain: 2.2,      // subida por segundo cuando vas rapido
+  speedThreshold: 19,  // velocidad minima para considerarse "rapido"
+  noHitBonus: 6,       // premio UNICO cada 10 s seguidos sin recibir dano
+  heavyBonus: 6,       // extra por matar un enemigo pesado
+  idleAfterKill: 1.6,  // segundos tras una baja antes de empezar a enfriarse
+  tiers: [             // multiplicador extra segun el FUEGO
+    { at: 0,  mult: 1.0,  name: '' },
+    { at: 25, mult: 1.25, name: 'CALIENTE' },
+    { at: 50, mult: 1.5,  name: 'ARDIENDO' },
+    { at: 75, mult: 2.0,  name: 'INFERNAL' },
+    { at: 95, mult: 3.0,  name: 'APOCALIPSIS' }
+  ]
+};
+S.fire = 0; S.fireTier = 0; S.lastWeaponKill = null; S.noHitT = 0; S.peakFire = 0;
+function fireMult() { return FIRE.tiers[S.fireTier].mult; }
+function fireAdd(n, why) {
+  if (!P.alive) return;
+  const before = S.fireTier;
+  S.fire = clamp(S.fire + n, 0, FIRE.max);
+  S.peakFire = Math.max(S.peakFire, S.fire);
+  updateFireTier(before);
+}
+function updateFireTier(before) {
+  let t = 0; for (let i = FIRE.tiers.length - 1; i >= 0; i--) if (S.fire >= FIRE.tiers[i].at) { t = i; break; }
+  S.fireTier = t;
+  if (t > before && t > 0) {
+    flashMsg(FIRE.tiers[t].name + '  x' + FIRE.tiers[t].mult.toFixed(2));
+    sfx('rank'); screenPunch(0.35);
+    const el = $('fireL'); if (el) { el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 220); }
+  }
+}
+/* Se llama en cada baja: aqui se decide cuanto FUEGO gana el jugador. */
+function fireOnKill(e) {
+  let gain = FIRE.perKill;
+  const quick = S.time - S.lastKillT < 1.2;
+  if (quick) gain += FIRE.quickKillBonus;
+  const wid = WEAPONS[wIdx].id;
+  if (S.lastWeaponKill && S.lastWeaponKill !== wid) { gain += FIRE.weaponSwapBonus; addStyle('CAMBIO DE ARMA', 20); }
+  S.lastWeaponKill = wid;
+  if (!P.onGround && !hook.state) gain += FIRE.airBonus;
+  if (e.d.heavy) gain += FIRE.heavyBonus;
+  fireAdd(gain);
+}
+/* Se llama cada frame: sube por moverte rapido, baja si estas parado. */
+function fireUpdate(dt) {
+  const sp = Math.hypot(P.vel.x, P.vel.z);
+  const nh0 = Math.floor(S.noHitT / 10); S.noHitT += dt;
+  if (Math.floor(S.noHitT / 10) > nh0 && S.time - S.lastKillT < 6) { fireAdd(FIRE.noHitBonus); addStyle('SIN DANO', 25); }
+  if (sp > FIRE.speedThreshold) fireAdd(FIRE.speedGain * dt);
+  else if (S.time - S.lastKillT > FIRE.idleAfterKill) {
+    const before = S.fireTier;
+    S.fire = Math.max(0, S.fire - FIRE.decayIdle * dt);   // sin kills recientes y sin velocidad: se enfria
+    updateFireTier(before);
+  }
+  const el = $('fireFill'); if (el) el.style.width = (S.fire / FIRE.max * 100) + '%';
+  fireHud();
+}
+/* Actualiza la etiqueta y el brillo de bordes. Solo toca el DOM si el nivel cambio (ahorra rendimiento). */
+let _fireHudKey = '';
+function fireHud() {
+  const key = S.fireTier + '|' + Math.round(S.fire / 5);
+  if (key === _fireHudKey) return;
+  _fireHudKey = key;
+  const t = FIRE.tiers[S.fireTier];
+  const lab = $('fireL'); if (lab) { lab.textContent = t.name ? t.name + '  x' + t.mult.toFixed(2) : 'FUEGO'; lab.style.opacity = S.fireTier ? 1 : 0.5; }
+  const g = $('fireGlow');
+  if (g) {
+    const cols = ['0,0,0', '255,150,40', '255,110,20', '255,60,20', '255,30,30'];
+    const inten = [0, 0.18, 0.3, 0.45, 0.62][S.fireTier];
+    g.style.boxShadow = S.fireTier ? `inset 0 0 ${60 + S.fireTier * 22}px ${6 + S.fireTier * 4}px rgba(${cols[S.fireTier]},${inten})` : 'none';
+    g.style.opacity = S.fireTier ? 1 : 0;
+  }
+}
+function fireOnHurt() {
+  S.noHitT = 0;
+  const before = S.fireTier;
+  S.fire = Math.max(0, S.fire - FIRE.decayHit);
+  updateFireTier(before);
+}
+
 const feed = [];
 function addStyle(label, pts) {
   S.rankT = Math.min(S.rankT + pts, 460);
   const before = S.rank;
   S.rank = 0; for (let r = RANKS.length - 1; r >= 0; r--) if (S.rankT >= RANKS[r].need) { S.rank = r; break; }
   S.mult = RANKS[S.rank].m;
-  S.score += Math.round(pts * S.mult * 0.5);
+  S.score += Math.round(pts * S.mult * fireMult() * 0.5);
   feed.unshift({ t: 2.2, txt: '+' + label }); if (feed.length > 4) feed.pop();
   if (S.rank > before) { sfx('rank'); const rl = $('rankL'); rl.classList.add('pop'); setTimeout(() => rl.classList.remove('pop'), 200); }
 }
@@ -1671,24 +1895,65 @@ function waveComposition(wave) {
   if (wave >= 9) pool.push('brute', 'charger', 'bomber');
   return pool;
 }
+
+/* NUEVO - "TEMAS" DE OLEADA
+   Cada cierto numero de oleadas el juego cambia el ritmo del combate.
+   Esto hace que las rondas no se sientan todas iguales. Son solo datos:
+   puedes cambiar los numeros sin miedo.
+     name   = texto que sale en pantalla
+     pool   = lista de enemigos que pueden salir (se repiten para dar mas peso)
+     mult   = multiplicador de cantidad de enemigos
+     rush   = 1 = salen mas rapido, 0.6 = salen mas despacio
+   El tema se elige con: (numero de oleada) % (cantidad de temas). */
+const WAVE_THEMES = [
+  { name: null,                 pool: null,                                          mult: 1.0,  rush: 1.0 },
+  { name: 'HORDA',              pool: ['husk', 'husk', 'husk', 'imp', 'imp'],        mult: 1.5,  rush: 0.7 },
+  { name: 'FRANCOTIRADORES',    pool: ['sniper', 'shooter', 'shooter', 'imp'],       mult: 0.8,  rush: 1.0 },
+  { name: 'EMBESTIDA',          pool: ['charger', 'charger', 'imp', 'husk'],         mult: 1.0,  rush: 0.9 },
+  { name: 'BOMBAS',             pool: ['bomber', 'bomber', 'bomber', 'husk', 'imp'], mult: 1.1,  rush: 0.85 },
+  { name: 'PESADOS',            pool: ['brute', 'brute', 'shooter', 'charger'],      mult: 0.55, rush: 1.2 }
+];
+function waveTheme(wave) {
+  if (wave < 4) return WAVE_THEMES[0];        // oleadas 1-3: normales, para aprender
+  if (wave % 5 === 0) return WAVE_THEMES[0];  // oleadas de jefe: sin tema
+  if (wave % 2 === 1) return WAVE_THEMES[0];  // las impares: normales (respiro)
+  // las pares (4, 6, 8, 12...) rotan entre los temas especiales 1..5
+  const special = WAVE_THEMES.length - 1;
+  return WAVE_THEMES[1 + (Math.floor(wave / 2) % special)];
+}
+
+/* CUANTOS ENEMIGOS TIENE CADA OLEADA
+   ANTES: se recortaba a 40 y a partir de la oleada ~10 la dificultad dejaba de subir.
+   AHORA: el "total" de la oleada puede ser MAYOR que 40, porque los enemigos salen
+   por goteo (nunca hay mas de MAX_ENEMIES_ONSCREEN a la vez en pantalla).
+   Asi la oleada 20 es de verdad mas larga e intensa que la 10. */
 function waveEnemyCount(wave) {
   const growth = 4 + wave * 2.1 + Math.pow(wave, 1.35) * 0.9;
-  return Math.round(growth * CFG.enemyCount);
+  return Math.round(growth * CFG.enemyCount * waveTheme(wave).mult);
 }
 function waveSpawnInterval(wave) {
-  return clamp(0.85 - wave * 0.055, 0.16, 0.85);
+  return clamp((0.85 - wave * 0.055) * waveTheme(wave).rush, 0.14, 0.95);
 }
 
 function beginWave() {
   S.wave++;
   const isBoss = CFG.bossEvery > 0 && S.wave % CFG.bossEvery === 0;
+  const theme = waveTheme(S.wave);
   S.waveIsBoss = isBoss;
+  S.waveTheme = isBoss ? null : theme;
   S.waveState = 'spawning';
   S.waveTimer = 0;
   S.waveSpawnT = 0;
   S.waveSpawned = 0;
-  S.waveTarget = isBoss ? 1 + Math.floor(S.wave / 6) : Math.min(waveEnemyCount(S.wave), MAX_ENEMIES_ONSCREEN);
-  S.wavePool = waveComposition(S.wave);
+  S.waveFails = 0;          // NUEVO: intentos de aparicion que fallaron en esta oleada
+  S.waveStall = 0;          // NUEVO: segundos seguidos sin ningun progreso (vigilante)
+  S.waveKilledInWave = 0;
+  S.waveLast = 0;
+  // ANTES: Math.min(total, MAX_ENEMIES_ONSCREEN). Ahora el total puede ser mayor (ver waveEnemyCount).
+  S.waveTarget = isBoss ? 1 + Math.floor(S.wave / 6) : waveEnemyCount(S.wave);
+  S.wavePool = (theme.pool && !isBoss) ? theme.pool.slice() : waveComposition(S.wave);
+  // Con un tema de "horda" y enemigos ligeros mezclamos unos pocos del pool normal para variar
+  if (theme.pool && !isBoss && S.wave >= 8) S.wavePool.push(...waveComposition(S.wave).slice(-3));
 
   if (isBoss) {
     sfx('boss'); P.shake = 0.9;
@@ -1697,30 +1962,102 @@ function beginWave() {
     sfx('wave');
     if (S.wave === 3) { WEAPONS[2].unlocked = true; flashMsg('RIEL DESBLOQUEADO'); }
     else if (S.wave === 5) { WEAPONS[3].unlocked = true; flashMsg('CLAVOS DESBLOQUEADO'); }
-    else flashMsg('OLEADA ' + S.wave);
+    else flashMsg(theme.name ? 'OLEADA ' + S.wave + ' \u00b7 ' + theme.name : 'OLEADA ' + S.wave);
   }
   addStyle('OLEADA', 15);
-  $('waveNum').textContent = S.wave + (isBoss ? ' \u00b7 JEFE' : '');
+  $('waveNum').textContent = S.wave + (isBoss ? ' \u00b7 JEFE' : (theme.name ? ' \u00b7 ' + theme.name : ''));
 }
 
-function pickSpawnPoint() {
-  const far = spawnPoints.filter(p => Math.hypot(p.x - P.pos.x, p.z - P.pos.z) > 16);
-  const src = far.length ? far : (spawnPoints.length ? spawnPoints : null);
-  if (!src) return new THREE.Vector3((Math.random() - 0.5) * 20, 3, (Math.random() - 0.5) * 20);
-  for (let tries = 0; tries < 6; tries++) {
-    const p = src[Math.floor(Math.random() * src.length)].clone();
-    if (!world.isBlocked(p.x, p.y, p.z, 1.2, 3)) return p;
+/* ---------------------------------------------------------------------
+   DONDE APARECEN LOS ENEMIGOS  (ARREGLADO)
+   Problema que habia: un punto de aparicion podia estar DENTRO de una pared
+   o pilar (medimos un 38% de puntos asi en niveles de prueba). El "plan B"
+   ademas sumaba +4 en altura, pero spawnEnemy() lo ignoraba, y el enemigo
+   podia nacer ATRAPADO dentro de un bloque, sin poder moverse jamas.
+   AHORA: probamos muchos puntos, comprobamos que haya suelo debajo y espacio
+   libre, y si todo falla usamos un punto de emergencia sobre el suelo central.
+   --------------------------------------------------------------------- */
+function isSpawnClear(x, z, size) {
+  const fy = world.floorY(x, z);
+  if (fy <= world.lavaY + 0.5) return null;                 // no hay suelo: caeria a la lava
+  const y = fy + size[1] / 2 + 0.05;
+  const r = Math.max(size[0], size[2]) / 2 + 0.25;
+  // el cuerpo completo debe caber sin tocar ninguna caja
+  if (world.isBlocked(x, y - size[1] / 2 + 0.05, z, r, size[1] - 0.1)) return null;
+  return y;
+}
+function pickSpawnPoint(size) {
+  size = size || [1, 1.8, 1];
+  const px = P.pos.x, pz = P.pos.z;
+  const tryList = (minDist, tries) => {
+    const src = spawnPoints;
+    for (let t = 0; t < tries && src.length; t++) {
+      const sp = src[Math.floor(Math.random() * src.length)];
+      if (Math.hypot(sp.x - px, sp.z - pz) < minDist) continue;
+      // probamos el punto y un par de desplazamientos pequenos alrededor
+      for (let k = 0; k < 3; k++) {
+        const x = sp.x + (k ? (Math.random() - 0.5) * 3 : 0), z = sp.z + (k ? (Math.random() - 0.5) * 3 : 0);
+        const y = isSpawnClear(x, z, size);
+        if (y !== null) return new THREE.Vector3(x, y, z);
+      }
+    }
+    return null;
+  };
+  let p = tryList(16, 24) || tryList(8, 24) || tryList(0, 40);
+  if (p) return p;
+  // Emergencia: puntos aleatorios sobre el suelo central del nivel (siempre es suelo firme)
+  for (let t = 0; t < 40; t++) {
+    const x = (Math.random() - 0.5) * 26, z = (Math.random() - 0.5) * 26;
+    const y = isSpawnClear(x, z, size);
+    if (y !== null && Math.hypot(x - px, z - pz) > 5) return new THREE.Vector3(x, y, z);
   }
-  const p = src[Math.floor(Math.random() * src.length)].clone();
-  p.y += 4;
-  return p;
+  return new THREE.Vector3(0, 0.9 + 0.05 + 2, 0);              // ultimo recurso: sobre el centro
 }
 
+/* Aparece UN enemigo del pool. Devuelve true solo si de verdad aparecio.
+   ANTES: se contaba como "spawneado" aunque fallara. AHORA solo cuenta si existe. */
 function spawnFromPool() {
   const type = S.wavePool[Math.floor(Math.random() * S.wavePool.length)];
-  const pos = pickSpawnPoint();
-  spawnEnemy(type, pos);
+  const d = ETYPES[type];
+  if (!d) { S.waveFails++; return false; }
+  let e = null;
+  try { e = spawnEnemy(type, pickSpawnPoint(d.size)); }
+  catch (err) { if (CFG.debug) console.error('Fallo al crear enemigo', type, err); e = null; }
+  if (!e) { S.waveFails++; return false; }
   S.waveSpawned++;
+  return true;
+}
+
+/* ---------------------------------------------------------------------
+   VIGILANTE ANTI-BLOQUEO
+   Garantiza que ninguna oleada se quede parada para siempre. Cada segundo
+   comprueba si "algo esta pasando" (sale un enemigo, muere uno, o el jugador
+   avanza). Si pasan varios segundos sin progreso, actua:
+     1) Si faltan enemigos por salir y hay hueco -> fuerza una aparicion.
+     2) Si hay enemigos vivos pero atrapados/lejos (sin moverse) -> los
+        recoloca cerca del jugador en un sitio seguro.
+     3) Si la oleada esta a punto de agotar su tiempo -> la cierra.
+   --------------------------------------------------------------------- */
+function relocateStuckEnemies() {
+  let moved = 0;
+  for (const e of enemies) {
+    if (e.d.boss) continue;
+    const p = e.mesh.position;
+    e.stuckT = e.stuckT || 0;
+    const lastX = e.lastX === undefined ? p.x : e.lastX, lastZ = e.lastZ === undefined ? p.z : e.lastZ;
+    const moving = Math.hypot(p.x - lastX, p.z - lastZ) > 0.6;
+    e.lastX = p.x; e.lastZ = p.z;
+    const ranged = e.type === 'sniper' || e.type === 'shooter';
+    if (moving || ranged) { e.stuckT = 0; continue; }
+    e.stuckT += 1;                                   // se llama 1 vez por segundo
+    if (e.stuckT >= 6) {                             // 6 s inmovil = atrapado
+      const np = pickSpawnPoint(e.d.size);
+      p.copy(np); e.vel.set(0, 0, 0); e.stuckT = 0; e.lastX = np.x; e.lastZ = np.z;
+      impactRing(new THREE.Vector3(np.x, np.y - 0.8, np.z), 0xff5a20, 1.2);
+      moved++;
+    }
+  }
+  return moved;
 }
 
 function updateWaves(dt) {
@@ -1730,33 +2067,85 @@ function updateWaves(dt) {
     if (S.waveTimer <= 0) beginWave();
     return;
   }
+
   if (S.waveState === 'spawning') {
     S.waveSpawnT -= dt;
-    if (S.waveSpawnT <= 0 && S.waveSpawned < S.waveTarget && enemies.length < MAX_ENEMIES_ONSCREEN) {
+    // Se permite mas de un spawn por frame si el juego va lento (asi el ritmo no depende de los FPS)
+    let guard = 0;
+    while (S.waveSpawnT <= 0 && S.waveSpawned < S.waveTarget && enemies.length < MAX_ENEMIES_ONSCREEN && guard++ < 4) {
       if (S.waveIsBoss) {
         const bp = new THREE.Vector3(0, 1.2, -18);
-        const bs = spawnEnemy('warden', bp);
-        if (bs) { bs.hp = bs.d.hp + S.wave * 45; bs.maxHp = bs.hp; bossActive = true; $('bossBar').classList.add('on'); }
-        S.waveSpawned = S.waveTarget;
+        let bs = null;
+        try { bs = spawnEnemy('warden', bp); } catch (err) { bs = null; }
+        if (bs) { bs.hp = bs.d.hp + S.wave * 45; bs.maxHp = bs.hp; bossActive = true; $('bossBar').classList.add('on'); S.waveSpawned++; }
+        else S.waveFails++;
       } else {
         spawnFromPool();
       }
-      S.waveSpawnT = waveSpawnInterval(S.wave);
+      S.waveSpawnT += waveSpawnInterval(S.wave);
+      if (S.waveFails > 40) break;                   // demasiados fallos: dejamos que actue el vigilante
     }
-    if (S.waveSpawned >= S.waveTarget) S.waveState = 'active';
+    // La oleada pasa a "activa" cuando ya salieron todos, o cuando ya no se puede seguir intentando
+    if (S.waveSpawned >= S.waveTarget || S.waveFails > 40) S.waveState = 'active';
     $('waveTimer').textContent = S.waveSpawned + '/' + S.waveTarget;
-  } else if (S.waveState === 'active') {
+  }
+
+  if (S.waveState === 'active' || S.waveState === 'spawning') {
     S.waveTimer += dt;
-    $('waveTimer').textContent = enemies.length + ' vivos';
-    const cleared = enemies.length === 0;
-    const timedOut = S.waveTimer > CFG.waveMaxTime;
-    if (cleared || timedOut) {
-      if (timedOut && enemies.length > 0) {
+    if (S.waveState === 'active') $('waveTimer').textContent = enemies.length + ' vivos';
+
+    // --- vigilante: se ejecuta 1 vez por segundo ---
+    S.waveWatch = (S.waveWatch || 0) + dt;
+    if (S.waveWatch >= 1) {
+      S.waveWatch -= 1;
+      const sig = S.waveSpawned + '|' + enemies.length + '|' + S.kills;
+      if (sig === S.waveSig) S.waveStall++; else { S.waveStall = 0; S.waveSig = sig; }
+      relocateStuckEnemies();
+      /* NUEVO - "LOS ULTIMOS": cuando ya salieron todos y quedan pocos, en vez de esperar
+         45 s a que se acabe el tiempo, los traemos cerca del jugador. Asi no hay que buscar
+         al ultimo enemigo por todo el mapa. Se activa tras 12 s con <= 3 enemigos vivos. */
+      if (S.waveState === 'active' && enemies.length > 0 && enemies.length <= 3) {
+        S.waveLast = (S.waveLast || 0) + 1;
+        if (S.waveLast >= 12) {
+          for (const e of enemies) {
+            if (e.d.boss) continue;
+            const d = Math.hypot(e.mesh.position.x - P.pos.x, e.mesh.position.z - P.pos.z);
+            if (d > 22) {
+              const np = pickSpawnPoint(e.d.size);            // nuevo punto seguro, preferentemente lejos... 
+              const a = Math.random() * Math.PI * 2, r = 14 + Math.random() * 6;
+              const x = P.pos.x + Math.cos(a) * r, z = P.pos.z + Math.sin(a) * r;
+              const y = isSpawnClear(x, z, e.d.size);
+              const dest = y !== null ? new THREE.Vector3(x, y, z) : np;    // cerca del jugador si hay sitio, si no punto seguro
+              e.mesh.position.copy(dest); e.vel.set(0, 0, 0);
+              impactRing(new THREE.Vector3(dest.x, dest.y - 0.8, dest.z), 0xff5a20, 1.4);
+            }
+          }
+          flashMsg('\u00a1QUEDAN ' + enemies.length + '!');
+          S.waveLast = -8;                                    // espera 20 s antes de volver a hacerlo
+        }
+      } else S.waveLast = 0;
+      // 6 s sin progreso y todavia faltan enemigos por salir -> forzamos aparicion
+      if (S.waveState === 'spawning' && S.waveStall >= 6 && S.waveSpawned < S.waveTarget) {
+        if (enemies.length >= MAX_ENEMIES_ONSCREEN) { relocateStuckEnemies(); }
+        else { for (let k = 0; k < 3 && S.waveSpawned < S.waveTarget; k++) spawnFromPool(); }
+        S.waveStall = 0;
+      }
+    }
+
+    const noMoreToSpawn = S.waveSpawned >= S.waveTarget || S.waveFails > 40;
+    const cleared = enemies.length === 0 && noMoreToSpawn;
+    // Tiempo maximo: solo cuenta cuando ya salieron todos (asi una oleada larga no se corta antes de tiempo)
+    const timedOut = S.waveState === 'active' && S.waveTimer > CFG.waveMaxTime + Math.min(30, S.wave * 1.5);
+    // Red de seguridad final: ninguna oleada dura mas de 3 minutos pase lo que pase
+    const hardLimit = S.waveTimer > 180;
+    if (cleared || timedOut || hardLimit) {
+      if ((timedOut || hardLimit) && enemies.length > 0) {
         for (const e of [...enemies]) killEnemyQuiet(e);
         flashMsg('OLEADA FORZADA');
       }
       S.waveState = 'idle';
       S.waveTimer = 1.6;
+      S.waveWatch = 0; S.waveStall = 0; S.waveSig = '';
       if (bossActive) { bossActive = false; $('bossBar').classList.remove('on'); }
     }
   }
@@ -1775,6 +2164,7 @@ function hurtPlayer(d) {
   const dmg = CFG.oneShot ? 9999 : d * CFG.enemyDmg;
   if (dmg <= 0) return;
   P.hp -= dmg; P.iframes = 0.25; hurtFx = 1;
+  fireOnHurt();
   const el = $('dmg'); el.style.opacity = 1; setTimeout(() => el.style.opacity = 0, 180);
   haptic(60); P.shake = Math.max(P.shake || 0, 0.4); sfx('hurt');
   S.style = Math.max(0, S.style - 2);
@@ -1793,7 +2183,7 @@ function die(title) {
   const fadeFlash = () => { postMat.uniforms.uFlash.value = Math.max(0, postMat.uniforms.uFlash.value - 0.04); if (postMat.uniforms.uFlash.value > 0) requestAnimationFrame(fadeFlash); };
   requestAnimationFrame(fadeFlash);
   $('deadTitle').textContent = title;
-  $('deadInfo').innerHTML = `Oleada ${S.wave} \u00b7 Rango ${RANKS[S.rank].n || '-'}<br>Puntos ${S.score}<br>Bajas ${S.kills} (${S.airKills} aereas)<br>Parries ${S.parries}<br>Semilla: ${currentSeedStr}`;
+  $('deadInfo').innerHTML = `Oleada ${S.wave} \u00b7 Rango ${RANKS[S.rank].n || '-'}<br>Puntos ${S.score}<br>Bajas ${S.kills} (${S.airKills} aereas)<br>Parries ${S.parries} \u00b7 Fuego maximo ${Math.round(S.peakFire)}<br>Semilla: ${currentSeedStr}`;
   setTimeout(() => { showScreen('dead'); setControls(false); }, 260);
 }
 
@@ -2119,6 +2509,7 @@ function frame(now) {
       updateEnemies(dt); updateProjectiles(dt); updateParticles(dt); updateTracers(dt);
       updateFx(dt); updatePickups(dt); updateMusic(dt); updateLasers();
       updateWaves(dt);
+      fireUpdate(dt);
       S.rankT = Math.max(0, S.rankT - dt * (6 + S.rank * 5));
       {
         let r = 0; for (let k = RANKS.length - 1; k >= 0; k--) if (S.rankT >= RANKS[k].need) { r = k; break; }
@@ -2226,8 +2617,9 @@ function newRun(seed) {
   resetAmmo(); setWeapon(0);
   S.wave = 0; S.score = 0; S.kills = 0; S.style = 0; S.time = 0;
   S.parries = 0; S.mult = 1; S.rank = 0; S.rankT = 0; S.airKills = 0; S.chain = 0; S.lastKillT = -9;
+  S.fire = 0; S.fireTier = 0; S.lastWeaponKill = null; S.noHitT = 0; S.peakFire = 0; _fireHudKey = ''; fireHud();
   S.waveState = 'idle'; S.waveTarget = 0; S.waveSpawned = 0; S.waveTimer = 0.8; S.waveSpawnT = 0; S.wavePool = ['husk'];
-  bossActive = false; $('bossBar').classList.remove('on'); feed.length = 0; parryT = 0; hitStop = 0; slamPending = false;
+  AU.lastFightT = undefined; bossActive = false; $('bossBar').classList.remove('on'); feed.length = 0; parryT = 0; hitStop = 0; slamPending = false;
   for (const k of pickups) { scene.remove(k.mesh); } pickups.length = 0;
   for (const f of fx) { scene.remove(f.m); } fx.length = 0;
   for (const l of laserMeshes) l.visible = false;
@@ -2283,6 +2675,12 @@ bindCheck('mHNoCd', 'hNoCd'); bindCheck('mHPullEnemy', 'hPullEnemy');
 bindCheck('mPost', 'post'); bindCheck('mEmbers', 'embers');
 bindCheck('mSound', 'sound'); bindCheck('mMusic', 'music'); bindCheck('mPickups', 'pickups');
 bindRange('mVol', 'volume', v => v.toFixed(2), () => { if (AU.master) AU.master.gain.value = CFG.volume; musicVolumeRefresh(); });
+/* Volumenes por categoria. El valor inicial sale de audio-config.js (asi si lo cambias ahi, el slider arranca en ese valor). */
+[['mVolMusic', 'music'], ['mVolWeapons', 'weapons'], ['mVolEnemies', 'enemies'], ['mVolPlayer', 'player'], ['mVolUi', 'ui']].forEach(([id, cat]) => {
+  const el = $(id), v = $(id + 'V');
+  el.value = CFG.vol[cat]; v.textContent = CFG.vol[cat].toFixed(2);
+  el.oninput = () => { CFG.vol[cat] = parseFloat(el.value); v.textContent = CFG.vol[cat].toFixed(2); audioVolumeRefresh(); };
+});
 bindRange('mParry', 'parryWindow', v => v.toFixed(2)); bindRange('mBoss', 'bossEvery', v => v | 0);
 bindRange('mWaveMax', 'waveMaxTime', v => v | 0);
 bindRange('mSpeed', 'speed', x1); bindRange('mJump', 'jump', x1); bindRange('mGrav', 'gravity', x1);
