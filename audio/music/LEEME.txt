@@ -1,1 +1,14 @@
+ARCHIVOS DE ESTA CARPETA  (audio/music/)
+============================================================
+Para cambiar una cancion: sube tu archivo con EXACTAMENTE uno de estos
+nombres. Reemplaza al anterior. No hay que tocar codigo.
 
+La musica cambia sola con lo que pasa en el juego:
+
+  musica-calma.mp3      Suena al empezar y entre oleadas (poca accion)
+  musica-batalla.mp3    Suena durante el combate normal
+  musica-jefe.mp3       Suena cuando hay un jefe
+
+Las transiciones entre ellas son suaves (se mezclan ~1.5 segundos).
+Recomendado: canciones que se puedan repetir en bucle sin cortes.
+Para una cancion distinta en una oleada concreta, mira GUIA_AUDIO.md.
