@@ -1,0 +1,145 @@
+/* =====================================================================
+   HELLRUSH - ESTILOS (colores, tamanos, animaciones de la interfaz)
+   =====================================================================
+   COLORES: si quieres cambiar los colores del juego, editalos AQUI
+   en el bloque ":root" de abajo. Cada color tiene un nombre.
+   Un color se escribe como #RRGGBB (por ejemplo #ff0000 es rojo).
+   ===================================================================== */
+:root {
+  --blood: #d40f0f;    /* rojo sangre: titulos, jefe */
+  --furnace: #ff6a1a;  /* naranja horno: botones activos, estilo */
+  --iron: #ffc933;     /* amarillo hierro: textos importantes */
+  --bone: #ece4d2;     /* hueso: textos y bordes */
+  --coal: #0d0908;     /* carbon: fondo oscuro */
+  --ash: #2a1f1c;      /* ceniza: fondos de botones */
+  --hook: #4fd8ff;     /* azul gancho */
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; user-select: none; -webkit-user-select: none; touch-action: none; }
+html, body { margin: 0; height: 100%; background: var(--coal); overflow: hidden; overscroll-behavior: none; font-family: "Courier New", "Lucida Console", monospace; color: var(--bone); }
+#game { position: fixed; inset: 0; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; display: block; background: #000; }
+
+/* ---------- HUD (lo que ves mientras juegas) ---------- */
+#hud { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: none; }
+#hud.on { display: block; animation: hudIn .5s ease-out; }
+@keyframes hudIn { from { opacity: 0; } to { opacity: 1; } }
+
+.bar { position: absolute; left: max(12px, env(safe-area-inset-left)); top: max(10px, env(safe-area-inset-top)); width: 34vw; max-width: 260px; }
+.bar .lbl { font-size: 11px; letter-spacing: 1px; color: var(--iron); margin-bottom: 2px; text-shadow: 1px 1px 0 #000; }
+.bar .track { height: 14px; background: #1a0d0b; border: 2px solid var(--bone); position: relative; box-shadow: 2px 2px 0 #000; overflow: hidden; }
+.bar .fill { height: 100%; background: linear-gradient(#ff3030, #a00a0a); width: 100%; transition: width .08s; position: relative; }
+/* brillo que recorre la barra de vida y de dash */
+.bar .fill::after { content: ""; position: absolute; top: 0; left: -40%; width: 40%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,.35), transparent); animation: barShine 2.6s linear infinite; }
+@keyframes barShine { to { left: 140%; } }
+.bar .fill.stam { background: linear-gradient(#ffe066, #e0a000); }
+.bar .track + .lbl { margin-top: 6px; }
+/* barra "fantasma": muestra cuanta vida acabas de perder */
+.bar .ghost { position: absolute; left: 0; top: 0; height: 100%; background: rgba(255,255,255,.55); width: 100%; transition: width .5s .25s ease-out; }
+#hpFill.low { animation: hpPulse .5s infinite; }
+@keyframes hpPulse { 0%,100%{filter:brightness(1)} 50%{filter:brightness(1.7)} }
+
+#score { position: absolute; right: max(12px, env(safe-area-inset-right)); top: max(10px, env(safe-area-inset-top)); text-align: right; font-size: 13px; color: var(--iron); text-shadow: 2px 2px 0 #000; }
+#score b { display: block; font-size: 22px; color: var(--bone); transition: transform .1s; }
+#score b.pop { transform: scale(1.35); color: var(--iron); }
+#style { position: absolute; right: max(12px, env(safe-area-inset-right)); top: 62px; text-align: right; font-size: 20px; font-weight: bold; color: var(--furnace); text-shadow: 2px 2px 0 #000; min-height: 24px; }
+#wave { position: absolute; left: 50%; top: max(10px, env(safe-area-inset-top)); transform: translateX(-50%); font-size: 12px; color: var(--bone); text-shadow: 2px 2px 0 #000; text-align: center; }
+#waveTimer { font-size: 10px; opacity: .75; }
+#weapon { position: absolute; right: max(12px, env(safe-area-inset-right)); bottom: 40%; font-size: 12px; color: var(--bone); text-align: right; text-shadow: 2px 2px 0 #000; }
+
+/* mira central */
+#cross { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; transform: translate(-50%,-50%); transition: transform .08s; }
+#cross::before, #cross::after { content: ""; position: absolute; background: var(--bone); mix-blend-mode: difference; }
+#cross::before { left: 8px; top: 0; width: 2px; height: 18px; }
+#cross::after { top: 8px; left: 0; height: 2px; width: 18px; }
+#cross.hook { transform: translate(-50%,-50%) rotate(45deg); }
+#cross.hook::before, #cross.hook::after { background: var(--hook); mix-blend-mode: normal; }
+#cross.hit { transform: translate(-50%,-50%) scale(1.6); }
+#cross.hit::before, #cross.hit::after { background: #fff; }
+
+/* rango de estilo */
+#rankBox { position: absolute; right: max(12px, env(safe-area-inset-right)); top: 96px; width: 96px; text-align: right; }
+#rankL { font-size: 34px; font-weight: bold; line-height: 1; color: var(--iron); text-shadow: 3px 3px 0 #000; min-height: 34px; transition: transform .12s; }
+#rankL.pop { transform: scale(1.3); }
+#rankBar { height: 5px; background: #1a0d0b; border: 1px solid var(--bone); margin-top: 3px; box-shadow: 1px 1px 0 #000; }
+#rankBar i { display: block; height: 100%; width: 0; background: var(--furnace); }
+#rankMult { font-size: 11px; color: var(--bone); margin-top: 2px; text-shadow: 1px 1px 0 #000; }
+#feed { position: absolute; right: max(12px, env(safe-area-inset-right)); top: 168px; text-align: right; font-size: 11px; line-height: 1.35; color: var(--bone); text-shadow: 1px 1px 0 #000; }
+#feed div { opacity: .9; animation: feedIn .15s ease-out; }
+@keyframes feedIn { from{opacity:0; transform:translateX(8px)} to{opacity:.9; transform:translateX(0)} }
+
+/* barra del jefe */
+#bossBar { position: absolute; left: 50%; top: 34px; transform: translateX(-50%); width: min(60vw, 420px); display: none; text-align: center; }
+#bossBar.on { display: block; animation: bossIn .6s cubic-bezier(.2,1.4,.4,1); }
+@keyframes bossIn { from { opacity: 0; transform: translateX(-50%) translateY(-20px) scale(.9); } to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); } }
+#bossBar .bn { font-size: 11px; letter-spacing: 3px; color: var(--blood); text-shadow: 1px 1px 0 #000; }
+#bossBar .bt { height: 10px; background: #1a0d0b; border: 2px solid var(--bone); margin-top: 2px; overflow: hidden; }
+#bossFill { height: 100%; width: 100%; background: linear-gradient(#ff5a20, #a01a0a); transition: width .1s; }
+
+/* efectos de pantalla */
+#laserWarn { position: absolute; inset: 0; box-shadow: inset 0 0 0 0 rgba(255,0,0,0); pointer-events: none; transition: box-shadow .1s; }
+#laserWarn.on { box-shadow: inset 0 0 90px 18px rgba(255,20,20,.55); }
+#hitmark { position: absolute; left: 50%; top: 50%; width: 28px; height: 28px; transform: translate(-50%,-50%) rotate(45deg); border: 2px solid var(--blood); opacity: 0; transition: opacity .12s; }
+#dmg { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 40%, rgba(212,15,15,.65)); opacity: 0; transition: opacity .25s; }
+#lavaFlash { position: absolute; inset: 0; background: #ff5a00; opacity: 0; transition: opacity .6s; mix-blend-mode: screen; }
+/* NUEVO: lineas de velocidad en los bordes cuando vas muy rapido */
+#speedLines { position: absolute; inset: 0; opacity: 0; transition: opacity .15s; background: radial-gradient(ellipse at center, transparent 55%, rgba(255,255,255,.14) 100%); mix-blend-mode: screen; }
+/* NUEVO: brillo verde/azul al recoger un objeto */
+#pickFlash { position: absolute; inset: 0; opacity: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(255,255,255,.35)); mix-blend-mode: screen; transition: opacity .3s; }
+
+#msg { position: absolute; left: 50%; top: 28%; transform: translateX(-50%) scale(1); font-size: 26px; font-weight: bold; color: var(--iron); text-shadow: 3px 3px 0 #000, 0 0 18px rgba(255,106,26,.5); opacity: 0; transition: opacity .3s, transform .3s; text-align: center; white-space: nowrap; }
+#msg.pop { transform: translateX(-50%) scale(1.15); }
+#hookHint { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); font-size: 11px; color: var(--hook); text-shadow: 1px 1px 0 #000; opacity: 0; transition: opacity .15s; }
+
+/* ---------- Controles tactiles ---------- */
+#ctl { position: fixed; inset: 0; z-index: 6; display: none; }
+#ctl.on { display: block; }
+#lookzone { position: absolute; right: 0; top: 0; width: 55%; height: 100%; }
+#movezone { position: absolute; left: 0; top: 30%; width: 45%; height: 70%; }
+#stick { position: absolute; width: 120px; height: 120px; border-radius: 50%; border: 3px solid rgba(236,228,210,.5); background: rgba(13,9,8,.35); display: none; }
+#stick i { position: absolute; left: 35px; top: 35px; width: 50px; height: 50px; border-radius: 50%; background: rgba(255,106,26,.75); border: 2px solid var(--bone); }
+.btn { position: absolute; width: 68px; height: 68px; border-radius: 50%; border: 3px solid var(--bone); background: rgba(13,9,8,.55); color: var(--bone); font: bold 12px "Courier New", monospace; display: flex; align-items: center; justify-content: center; text-align: center; line-height: 1.1; transition: transform .06s, background .06s, box-shadow .12s; }
+.btn.down { background: rgba(255,106,26,.75); transform: scale(.92); box-shadow: 0 0 18px rgba(255,106,26,.6); }
+#bFire { right: max(16px, env(safe-area-inset-right)); bottom: 22px; width: 92px; height: 92px; border-color: var(--blood); font-size: 14px; }
+#bAlt  { display: none; }
+#bJump { right: max(16px, env(safe-area-inset-right)); bottom: 128px; }
+#bDash { right: 96px; bottom: 112px; border-color: var(--furnace); }
+#bSlide{ right: 176px; bottom: 74px; }
+#bHook { right: 118px; bottom: 196px; border-color: var(--hook); color: var(--hook); }
+#bHook.down { background: rgba(79,216,255,.7); color: #000; box-shadow: 0 0 18px rgba(79,216,255,.6); }
+#bSwap { right: max(16px, env(safe-area-inset-right)); bottom: 210px; width: 56px; height: 56px; font-size: 11px; }
+#bMenu { left: 50%; transform: translateX(-50%); width: 46px; height: 30px; border-radius: 4px; font-size: 11px; top: 34px; }
+
+/* ---------- Pantallas (titulo, pausa, muerte) ---------- */
+.screen { position: fixed; inset: 0; z-index: 20; display: none; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; background: rgba(13,9,8,.82); }
+.screen.on { display: flex; animation: screenIn .35s ease-out; }
+@keyframes screenIn { from { opacity: 0; } to { opacity: 1; } }
+h1 { font-size: clamp(34px, 11vw, 64px); margin: 0 0 4px; letter-spacing: 3px; color: var(--blood); text-shadow: 4px 4px 0 var(--ash), 0 0 24px rgba(212,15,15,.5); animation: titleGlow 3s ease-in-out infinite; }
+/* el titulo "respira" con un resplandor rojo suave */
+@keyframes titleGlow { 0%,100% { text-shadow: 4px 4px 0 var(--ash), 0 0 18px rgba(212,15,15,.4); } 50% { text-shadow: 4px 4px 0 var(--ash), 0 0 38px rgba(255,60,20,.85); } }
+h2 { margin: 0 0 12px; color: var(--iron); font-size: 22px; }
+.sub { color: var(--bone); opacity: .8; font-size: 12px; margin-bottom: 22px; max-width: 340px; line-height: 1.5; }
+.big { padding: 14px 34px; font: bold 18px "Courier New", monospace; color: var(--coal); background: var(--iron); border: 3px solid var(--bone); margin: 6px; transition: transform .1s, box-shadow .15s, background .1s; }
+.big:active { background: var(--furnace); transform: scale(.96); box-shadow: 0 0 20px rgba(255,106,26,.6); }
+.big.alt { background: transparent; color: var(--bone); }
+
+/* ---------- MOD MENU ---------- */
+#mod { position: fixed; inset: 0; z-index: 30; display: none; background: rgba(13,9,8,.96); overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; padding: 14px 14px 30px; }
+#mod.on { display: block; animation: screenIn .25s ease-out; }
+#mod * { touch-action: pan-y; }
+#mod h2 { text-align: left; border-bottom: 2px solid var(--blood); padding-bottom: 6px; }
+.row { display: flex; align-items: center; justify-content: space-between; padding: 10px 4px; border-bottom: 1px solid var(--ash); font-size: 14px; gap: 10px; }
+.row label { flex: 1; }
+.row input[type=checkbox] { width: 26px; height: 26px; accent-color: var(--furnace); }
+.row input[type=range] { width: 46%; accent-color: var(--furnace); }
+.row .val { min-width: 42px; text-align: right; color: var(--iron); }
+.sec { color: var(--furnace); font-size: 12px; margin: 16px 0 2px; letter-spacing: 2px; }
+.mbtn { padding: 10px 14px; margin: 4px 4px 0 0; font: bold 13px "Courier New", monospace; color: var(--bone); background: var(--ash); border: 2px solid var(--bone); }
+.mbtn:active { background: var(--furnace); color: var(--coal); }
+#seedIn { width: 46%; background: #000; color: var(--iron); border: 2px solid var(--bone); padding: 8px; font: 14px "Courier New", monospace; user-select: text; -webkit-user-select: text; }
+
+#rotate { position: fixed; inset: 0; z-index: 99; background: var(--coal); display: none; align-items: center; justify-content: center; text-align: center; font-size: 18px; color: var(--iron); padding: 30px; }
+@media (orientation: portrait) { #rotate { display: flex; } }
+
+/* Respeta a quien tiene "reducir movimiento" activado en su telefono */
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
+}

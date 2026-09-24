@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>HELLRUSH v3</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="bar">
+    <div class="lbl">VIDA</div><div class="track"><div class="ghost" id="hpGhost"></div><div class="fill" id="hpFill"></div></div>
+    <div class="lbl">DASH</div><div class="track"><div class="fill stam" id="stFill"></div></div>
+  </div>
+  <div id="wave">OLEADA <span id="waveNum">0</span><div id="waveTimer"></div></div>
+  <div id="score"><b id="scoreV">0</b><span id="killsV">0 bajas</span></div>
+  <div id="style"></div>
+  <div id="rankBox"><div id="rankL"></div><div id="rankBar"><i id="rankFill"></i></div><div id="rankMult"></div></div>
+  <div id="feed"></div>
+  <div id="bossBar"><div class="bn">EL CARCELERO</div><div class="bt"><div id="bossFill"></div></div></div>
+  <div id="laserWarn"></div>
+  <div id="weapon"></div>
+  <div id="cross"></div>
+  <div id="hitmark"></div>
+  <div id="dmg"></div>
+  <div id="lavaFlash"></div>
+  <div id="speedLines"></div>
+  <div id="pickFlash"></div>
+  <div id="msg"></div>
+  <div id="hookHint">GANCHO LISTO</div>
+</div>
+
+<div id="ctl">
+  <div id="lookzone"></div>
+  <div id="movezone"></div>
+  <div id="stick"><i></i></div>
+  <div class="btn" id="bFire">FUEGO</div>
+  <div class="btn" id="bAlt">ALT</div>
+  <div class="btn" id="bJump">SALTO</div>
+  <div class="btn" id="bDash">DASH</div>
+  <div class="btn" id="bSlide">SLIDE</div>
+  <div class="btn" id="bHook">GANCHO</div>
+  <div class="btn" id="bSwap">ARMA</div>
+  <div class="btn" id="bMenu">MOD</div>
+</div>
+
+<div class="screen on" id="title">
+  <h1>HELLRUSH</h1>
+  <div class="sub">Arena shooter frenetico de movilidad extrema. Sangre = vida. La lava mata al instante.</div>
+  <div class="big" id="bStart">ENTRAR</div>
+  <div class="big alt" id="bModT">MOD MENU</div>
+  <div class="sub" style="margin-top:18px">Izq: joystick &middot; Der: mirar<br>GANCHO: manten para colgarte y balancearte &middot; sueltalo para salir disparado<br>Doble toque SALTO: impulso &middot; SLIDE en aire: caida rapida con impacto<br><b>PARRY:</b> dispara a un proyectil enemigo cuando lo tengas encima y lo devuelves</div>
+</div>
+
+<div class="screen" id="pause">
+  <h2>PAUSA</h2>
+  <div class="big" id="bResume">SEGUIR</div>
+  <div class="big alt" id="bModP">MOD MENU</div>
+  <div class="big alt" id="bQuit">SALIR</div>
+</div>
+
+<div class="screen" id="dead">
+  <h1 id="deadTitle">MUERTO</h1>
+  <div class="sub" id="deadInfo"></div>
+  <div class="big" id="bRetry">REINTENTAR</div>
+  <div class="big alt" id="bNew">NUEVO NIVEL</div>
+</div>
+
+<div id="mod">
+  <h2>MOD MENU</h2>
+
+  <div class="sec">JUGADOR</div>
+  <div class="row"><label>Dios (inmortal, incluye lava)</label><input type="checkbox" id="mGod"></div>
+  <div class="row"><label>Lava letal</label><input type="checkbox" id="mLava" checked></div>
+  <div class="row"><label>Stamina infinita</label><input type="checkbox" id="mInfSt"></div>
+  <div class="row"><label>Municion infinita</label><input type="checkbox" id="mInfAmmo"></div>
+  <div class="row"><label>Un golpe = muerte</label><input type="checkbox" id="mOneShot"></div>
+  <div class="row"><label>Vuelo (noclip suave)</label><input type="checkbox" id="mFly"></div>
+  <div class="row"><label>Velocidad</label><input type="range" id="mSpeed" min="0.5" max="3" step="0.1" value="1"><span class="val" id="mSpeedV">1.0x</span></div>
+  <div class="row"><label>Salto</label><input type="range" id="mJump" min="0.5" max="3" step="0.1" value="1"><span class="val" id="mJumpV">1.0x</span></div>
+  <div class="row"><label>Gravedad</label><input type="range" id="mGrav" min="0.1" max="2" step="0.1" value="1"><span class="val" id="mGravV">1.0x</span></div>
+  <div class="row"><label>Camara lenta</label><input type="range" id="mTime" min="0.1" max="1.5" step="0.05" value="1"><span class="val" id="mTimeV">1.0x</span></div>
+  <div class="row"><label>Sensibilidad mirada</label><input type="range" id="mSens" min="0.3" max="3" step="0.1" value="1"><span class="val" id="mSensV">1.0x</span></div>
+  <div class="row"><label>Campo de vision</label><input type="range" id="mFov" min="60" max="120" step="1" value="90"><span class="val" id="mFovV">90</span></div>
+
+  <div class="sec">AUDIO</div>
+  <div class="row"><label>Efectos de sonido</label><input type="checkbox" id="mSound" checked></div>
+  <div class="row"><label>Musica</label><input type="checkbox" id="mMusic" checked></div>
+  <div class="row"><label>Volumen general</label><input type="range" id="mVol" min="0" max="1" step="0.05" value="0.7"><span class="val" id="mVolV">0.70</span></div>
+
+  <div class="sec">GAMEPLAY</div>
+  <div class="row"><label>Ventana de parry (s)</label><input type="range" id="mParry" min="0.05" max="0.6" step="0.01" value="0.22"><span class="val" id="mParryV">0.22</span></div>
+  <div class="row"><label>Jefe cada N oleadas (0 = nunca)</label><input type="range" id="mBoss" min="0" max="10" step="1" value="5"><span class="val" id="mBossV">5</span></div>
+  <div class="row"><label>Tiempo maximo por oleada (s)</label><input type="range" id="mWaveMax" min="20" max="90" step="5" value="45"><span class="val" id="mWaveMaxV">45</span></div>
+  <div class="row"><label>Pickups (vida/municion/dash)</label><input type="checkbox" id="mPickups" checked></div>
+  <div style="padding-top:6px">
+    <button class="mbtn" data-spawn="imp">+ Imp</button>
+    <button class="mbtn" data-spawn="bomber">+ Bomber</button>
+    <button class="mbtn" data-spawn="sniper">+ Sniper</button>
+    <button class="mbtn" data-spawn="warden">+ JEFE</button>
+    <button class="mbtn" id="mNextWave">Saltar oleada</button>
+    <button class="mbtn" id="mMaxStyle">Estilo al maximo</button>
+  </div>
+
+  <div class="sec">GANCHO</div>
+  <div class="row"><label>Alcance</label><input type="range" id="mHRange" min="20" max="120" step="5" value="60"><span class="val" id="mHRangeV">60</span></div>
+  <div class="row"><label>Fuerza de tiron</label><input type="range" id="mHPull" min="0.5" max="3" step="0.1" value="1"><span class="val" id="mHPullV">1.0x</span></div>
+  <div class="row"><label>Sin enfriamiento</label><input type="checkbox" id="mHNoCd"></div>
+  <div class="row"><label>Atrae enemigos ligeros</label><input type="checkbox" id="mHPullEnemy" checked></div>
+
+  <div class="sec">ENEMIGOS</div>
+  <div class="row"><label>Enemigos pasivos (IA off)</label><input type="checkbox" id="mPassive"></div>
+  <div class="row"><label>Daño enemigo</label><input type="range" id="mEDmg" min="0" max="3" step="0.1" value="1"><span class="val" id="mEDmgV">1.0x</span></div>
+  <div class="row"><label>Cantidad por oleada</label><input type="range" id="mCount" min="1" max="4" step="0.25" value="1"><span class="val" id="mCountV">1.0x</span></div>
+  <div style="padding-top:6px">
+    <button class="mbtn" data-spawn="husk">+ Husk</button>
+    <button class="mbtn" data-spawn="shooter">+ Tirador</button>
+    <button class="mbtn" data-spawn="charger">+ Embestidor</button>
+    <button class="mbtn" data-spawn="brute">+ Bruto</button>
+    <button class="mbtn" id="mKillAll">Matar todos</button>
+  </div>
+
+  <div class="sec">ARMAS</div>
+  <div class="row"><label>Daño arma</label><input type="range" id="mWDmg" min="0.5" max="10" step="0.5" value="1"><span class="val" id="mWDmgV">1.0x</span></div>
+  <div class="row"><label>Cadencia</label><input type="range" id="mRate" min="0.5" max="5" step="0.25" value="1"><span class="val" id="mRateV">1.0x</span></div>
+  <div style="padding-top:6px">
+    <button class="mbtn" id="mUnlock">Desbloquear todas</button>
+    <button class="mbtn" id="mHeal">Curar</button>
+  </div>
+
+  <div class="sec">NIVEL PROCEDURAL</div>
+  <div class="row"><label>Semilla</label><input id="seedIn" value=""></div>
+  <div class="row"><label>Tamaño (celdas)</label><input type="range" id="mSize" min="6" max="16" step="1" value="10"><span class="val" id="mSizeV">10</span></div>
+  <div class="row"><label>Densidad de plataformas</label><input type="range" id="mDens" min="0" max="1" step="0.05" value="0.5"><span class="val" id="mDensV">0.50</span></div>
+  <div class="row"><label>Niebla</label><input type="range" id="mFog" min="0.2" max="3" step="0.1" value="1"><span class="val" id="mFogV">1.0x</span></div>
+  <div style="padding-top:6px">
+    <button class="mbtn" id="mRegen">Regenerar (misma semilla)</button>
+    <button class="mbtn" id="mRandom">Semilla aleatoria</button>
+  </div>
+
+  <div class="sec">GRAFICOS</div>
+  <div class="row"><label>Post-proceso (CRT/dither)</label><input type="checkbox" id="mPost" checked></div>
+  <div class="row"><label>Resolucion interna (alto)</label><input type="range" id="mRes" min="160" max="540" step="20" value="320"><span class="val" id="mResV">320</span></div>
+  <div class="row"><label>Intensidad dither</label><input type="range" id="mDither" min="0" max="1" step="0.05" value="0.6"><span class="val" id="mDitherV">0.60</span></div>
+  <div class="row"><label>Brasas y particulas</label><input type="checkbox" id="mEmbers" checked></div>
+
+  <div class="sec">DEPURACION</div>
+  <div class="row"><label>Mostrar FPS / estado</label><input type="checkbox" id="mDebug"></div>
+  <div class="row"><label>Vibracion haptica</label><input type="checkbox" id="mHaptic" checked></div>
+
+  <div style="margin-top:22px"><button class="big" id="mClose">CERRAR</button></div>
+</div>
+
+<div id="rotate">Gira el telefono a horizontal para jugar.</div>
+
+<!-- Librerias y archivos del juego. EL ORDEN IMPORTA: no lo cambies. -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="audio-config.js"></script>
+<script src="game.js"></script>
+
+</body>
+</html>
