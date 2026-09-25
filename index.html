@@ -56,7 +56,7 @@
   <div class="sub">Arena shooter frenetico de movilidad extrema. Sangre = vida. La lava mata al instante.</div>
   <div class="big" id="bStart">MODO INFINITO</div>
   <div class="big" id="bVersus">MODO VERSUS</div>
-  <div class="big" id="bOnline">JUEGO ONLINE</div>
+  <div class="big" id="bOnline">MULTIJUGADOR</div>
   <div class="big alt" id="bOptions">OPCIONES</div>
   <div class="big alt" id="bModT">MOD MENU</div>
   <div class="big alt" id="bExit">SALIR</div>
@@ -111,6 +111,40 @@
   <h2>SALIR</h2>
   <div class="sub">Puedes cerrar esta pestana para salir del juego.</div>
   <div class="big alt" id="exitBack">VOLVER AL MENU</div>
+</div>
+
+<!-- ===================================================================
+     MULTIJUGADOR - pantallas nuevas. No tocan ni reemplazan ninguna
+     pantalla existente, solo se anaden al mismo sistema showScreen().
+     =================================================================== -->
+<div class="screen" id="mpMenu">
+  <h2>MULTIJUGADOR</h2>
+  <div class="sub">Conexion real entre dos navegadores. El que crea la partida es el Host.</div>
+  <div class="row" style="justify-content:center;gap:8px;margin:10px 0">
+    <label style="min-width:auto">Servidor relay</label>
+    <input id="mpServerUrl" class="keyin" style="text-transform:none;letter-spacing:0" placeholder="wss://tu-servidor-relay">
+  </div>
+  <div class="big" id="mpCreateInfinite">CREAR PARTIDA · INFINITO</div>
+  <div class="big" id="mpCreateVersus">CREAR PARTIDA · VERSUS</div>
+  <div class="big" id="mpJoinOpen">UNIRSE A PARTIDA</div>
+  <div class="big alt" id="mpBack">VOLVER</div>
+</div>
+
+<div class="screen" id="mpJoin">
+  <h2>UNIRSE A PARTIDA</h2>
+  <div class="sub">Introduce el codigo de 5 letras que te dio el Host</div>
+  <input id="mpJoinCode" class="keyin" maxlength="5" placeholder="CODIGO" autocomplete="off">
+  <div class="sub err" id="mpJoinErr"></div>
+  <div class="big" id="mpJoinGo">CONECTAR</div>
+  <div class="big alt" id="mpJoinBack">VOLVER</div>
+</div>
+
+<div class="screen" id="mpStatus">
+  <h2 id="mpStatusTitle">CONECTANDO...</h2>
+  <div class="sub" id="mpStatusSub"></div>
+  <div id="mpRoomCode" class="mpcode"></div>
+  <div class="sub" id="mpStatusHint"></div>
+  <div class="big alt" id="mpCancel">CANCELAR</div>
 </div>
 
 <div id="mod">
@@ -209,6 +243,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="audio-config.js"></script>
 <script src="game.js"></script>
+<script src="net.js"></script>
 
 </body>
 </html>

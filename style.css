@@ -159,4 +159,5 @@ h2 { margin: 0 0 12px; color: var(--iron); font-size: 22px; }
 .keyin:focus { border-color: var(--furnace); }
 .sub.err { min-height: 18px; color: var(--blood); font-weight: bold; margin: 2px 0 10px; }
 .keyin.shake { animation: keyShake .35s; border-color: var(--blood); }
+.mpcode { font: bold 48px "Courier New", monospace; letter-spacing: 10px; color: var(--furnace, #ff9a30); margin: 14px 0; text-shadow: 3px 3px 0 #000; }
 @keyframes keyShake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-9px); } 40% { transform: translateX(9px); } 60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } }

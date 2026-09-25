@@ -520,24 +520,25 @@ function overlapBox(px, py, pz, r, h, b) {
   return px + r > b.minX && px - r < b.maxX && pz + r > b.minZ && pz - r < b.maxZ && py + h > b.minY && py < b.maxY;
 }
 
-function movePlayer(dt) {
-  const h = P.sliding ? 0.9 : P.h;
-  P.onGround = false;
-  P.pos.x += P.vel.x * dt;
-  for (const b of world.boxes) if (overlapBox(P.pos.x, P.pos.y - P.h, P.pos.z, P.r, h, b)) {
-    if (P.vel.x > 0) P.pos.x = b.minX - P.r - 0.001; else P.pos.x = b.maxX + P.r + 0.001;
-    P.vel.x = 0;
+function movePlayer(dt, pl) {
+  pl = pl || P; // por defecto se comporta igual que siempre (jugador local P)
+  const h = pl.sliding ? 0.9 : pl.h;
+  pl.onGround = false;
+  pl.pos.x += pl.vel.x * dt;
+  for (const b of world.boxes) if (overlapBox(pl.pos.x, pl.pos.y - pl.h, pl.pos.z, pl.r, h, b)) {
+    if (pl.vel.x > 0) pl.pos.x = b.minX - pl.r - 0.001; else pl.pos.x = b.maxX + pl.r + 0.001;
+    pl.vel.x = 0;
   }
-  P.pos.z += P.vel.z * dt;
-  for (const b of world.boxes) if (overlapBox(P.pos.x, P.pos.y - P.h, P.pos.z, P.r, h, b)) {
-    if (P.vel.z > 0) P.pos.z = b.minZ - P.r - 0.001; else P.pos.z = b.maxZ + P.r + 0.001;
-    P.vel.z = 0;
+  pl.pos.z += pl.vel.z * dt;
+  for (const b of world.boxes) if (overlapBox(pl.pos.x, pl.pos.y - pl.h, pl.pos.z, pl.r, h, b)) {
+    if (pl.vel.z > 0) pl.pos.z = b.minZ - pl.r - 0.001; else pl.pos.z = b.maxZ + pl.r + 0.001;
+    pl.vel.z = 0;
   }
-  P.pos.y += P.vel.y * dt;
-  for (const b of world.boxes) if (overlapBox(P.pos.x, P.pos.y - P.h, P.pos.z, P.r, h, b)) {
-    if (P.vel.y <= 0) { P.pos.y = b.maxY + P.h + 0.001; P.onGround = true; }
-    else { P.pos.y = b.minY - 0.15 - 0.001; }
-    P.vel.y = 0;
+  pl.pos.y += pl.vel.y * dt;
+  for (const b of world.boxes) if (overlapBox(pl.pos.x, pl.pos.y - pl.h, pl.pos.z, pl.r, h, b)) {
+    if (pl.vel.y <= 0) { pl.pos.y = b.maxY + pl.h + 0.001; pl.onGround = true; }
+    else { pl.pos.y = b.minY - 0.15 - 0.001; }
+    pl.vel.y = 0;
   }
 }
 
@@ -1025,6 +1026,7 @@ function buildExecutor() {
 const BUILDERS = { husk: buildHusk, shooter: buildShooter, charger: buildCharger, brute: buildBrute, imp: buildImp, bomber: buildBomber, sniper: buildSniper, warden: buildWarden,
   widow: buildWidow, bombardier: buildBombardier, vortex: buildVortex, executor: buildExecutor };
 
+let _netEnemyIdSeq = 0; // id incremental para identificar enemigos en snapshots de red (multijugador)
 function spawnEnemy(type, pos) {
   const d = ETYPES[type];
   if (!d) return null;
@@ -1040,7 +1042,7 @@ function spawnEnemy(type, pos) {
   const e = {
     type, d, mesh: root, model: built, hp: d.hp, vel: new THREE.Vector3(), cd: 0.5 + Math.random(),
     state: 0, st: 0, flash: 0, grounded: false, walk: Math.random() * 6, shootAnim: 0,
-    spawnT: 0.35, scaleIn: 0
+    spawnT: 0.35, scaleIn: 0, netId: (typeof _netEnemyIdSeq !== 'undefined') ? ++_netEnemyIdSeq : 0
   };
   enemies.push(e);
   // NUEVO: anillo y humo al aparecer, para que se note de donde salen
@@ -1246,7 +1248,12 @@ function steerAwayFromEdge(e, p) {
 }
 
 function updateEnemies(dt) {
-  const target = new THREE.Vector3(P.pos.x, P.pos.y - 0.9, P.pos.z);
+  const targetHost = new THREE.Vector3(P.pos.x, P.pos.y - 0.9, P.pos.z);
+  // MULTIJUGADOR: si hay un jugador remoto vivo (partida Host/Cliente), cada enemigo elige
+  // como objetivo al mas cercano de los dos. Sin multijugador, 'remoteTarget' es null y el
+  // comportamiento es identico al original (siempre el jugador local).
+  const remoteTarget = (typeof netIsHost === 'function' && netIsHost() && typeof RP !== 'undefined' && RP.alive)
+    ? new THREE.Vector3(RP.pos.x, RP.pos.y - 0.9, RP.pos.z) : null;
   for (const e of [...enemies]) {
     const p = e.mesh.position;
     const wasFlash = e.flash > 0; e.flash -= dt;
@@ -1255,6 +1262,9 @@ function updateEnemies(dt) {
 
     e.vel.y -= G * dt;
     if (CFG.passive) { e.vel.x = e.vel.z = 0; }
+
+    let target = targetHost, attackingRemote = false;
+    if (remoteTarget && p.distanceTo(remoteTarget) < p.distanceTo(targetHost)) { target = remoteTarget; attackingRemote = true; }
 
     const toP = new THREE.Vector3(target.x - p.x, 0, target.z - p.z);
     const dist = toP.length(); toP.normalize();
@@ -1441,7 +1451,7 @@ function updateEnemies(dt) {
       }
       if (e.d.melee && dist < e.d.size[0] / 2 + 0.9 && Math.abs(p.y - target.y) < 2) {
         if (e.cd <= 0 || (e.type === 'charger' && e.state === 2)) {
-          hurtPlayer(e.d.dmg);
+          hurtEitherPlayer(e.d.dmg, attackingRemote);
           e.cd = 0.9;
           if (e.type === 'charger') e.state = 0;
         }
@@ -1527,6 +1537,15 @@ function explode(pos, radius, dmg, source) {
     const away = new THREE.Vector3(P.pos.x - pos.x, 0.4, P.pos.z - pos.z).normalize();
     P.vel.addScaledVector(away, 18 * (1 - d / radius));
   }
+  // MULTIJUGADOR: la explosion es area de efecto, asi que tambien puede alcanzar al jugador remoto.
+  if (typeof netIsHost === 'function' && netIsHost() && typeof RP !== 'undefined' && RP.alive) {
+    const dr = Math.hypot(RP.pos.x - pos.x, (RP.pos.y - 0.9) - pos.y, RP.pos.z - pos.z);
+    if (dr < radius) {
+      hurtRemotePlayer(dmg * (1 - dr / radius * 0.5));
+      const awayR = new THREE.Vector3(RP.pos.x - pos.x, 0.4, RP.pos.z - pos.z).normalize();
+      RP.vel.addScaledVector(awayR, 18 * (1 - dr / radius));
+    }
+  }
   for (const o of [...enemies]) {
     if (o === source) continue;
     const od = o.mesh.position.distanceTo(pos);
@@ -1549,6 +1568,12 @@ function updateFx(dt) {
       const r = f.t * f.wave.speed;
       const dd = Math.hypot(P.pos.x - f.wave.x, P.pos.z - f.wave.z);
       if (Math.abs(dd - r) < 1.4 && (P.pos.y - P.h) < world.floorY(P.pos.x, P.pos.z) + 0.9) { hurtPlayer(f.wave.dmg); f.wave.hit = true; }
+    }
+    // MULTIJUGADOR: misma onda, comprobada tambien contra el jugador remoto (flag independiente).
+    if (f.wave && !f.wave.hitRemote && typeof netIsHost === 'function' && netIsHost() && typeof RP !== 'undefined' && RP.alive) {
+      const r = f.t * f.wave.speed;
+      const ddr = Math.hypot(RP.pos.x - f.wave.x, RP.pos.z - f.wave.z);
+      if (Math.abs(ddr - r) < 1.4 && (RP.pos.y - RP.h) < world.floorY(RP.pos.x, RP.pos.z) + 0.9) { hurtRemotePlayer(f.wave.dmg); f.wave.hitRemote = true; }
     }
     if (k >= 1) { scene.remove(f.m); f.m.geometry.dispose(); f.m.material.dispose(); fx.splice(i, 1); }
   }
@@ -1643,7 +1668,9 @@ function updateLobs(dt) {
     const fy = world.floorY(pp.x, pp.z);
     const hitGround = pp.y <= fy + 0.3 && l.vel.y < 0;
     const nearP = Math.hypot(pp.x - P.pos.x, pp.z - P.pos.z) < 1.2 && Math.abs(pp.y - (P.pos.y - 0.8)) < 1.6;
-    if (hitGround || nearP || l.life <= 0) {
+    const nearRemote = (typeof netIsHost === 'function' && netIsHost() && typeof RP !== 'undefined' && RP.alive)
+      && Math.hypot(pp.x - RP.pos.x, pp.z - RP.pos.z) < 1.2 && Math.abs(pp.y - (RP.pos.y - 0.8)) < 1.6;
+    if (hitGround || nearP || nearRemote || l.life <= 0) {
       explode(new THREE.Vector3(pp.x, Math.max(pp.y, fy + 0.3), pp.z), 6.5, l.dmg, null);
       scene.remove(l.mesh); disposeGroup(l.mesh); lobs.splice(i, 1);
     }
@@ -1689,6 +1716,13 @@ function updateProjectiles(dt) {
         continue;
       }
       if (!dead && dx * dx + dz * dz < 0.7 && Math.abs(dy) < 1.1) { hurtPlayer(pr.dmg); dead = true; }
+      // MULTIJUGADOR: el mismo proyectil tambien puede alcanzar al jugador remoto.
+      // NOTA: el remoto no puede hacer parry aqui (el parry usa la camara del jugador local),
+      // asi que para el jugador remoto el proyectil solo hace dano normal, nunca se devuelve.
+      if (!dead && typeof netIsHost === 'function' && netIsHost() && typeof RP !== 'undefined' && RP.alive) {
+        const rdx = pp.x - RP.pos.x, rdz = pp.z - RP.pos.z, rdy = pp.y - (RP.pos.y - 0.8);
+        if (rdx * rdx + rdz * rdz < 0.7 && Math.abs(rdy) < 1.1) { hurtRemotePlayer(pr.dmg); dead = true; }
+      }
     }
     if (!dead) for (const b of world.boxes) if (overlapBox(pp.x, pp.y - 0.15, pp.z, 0.15, 0.3, b)) { dead = true; break; }
     if (dead) { scene.remove(pr.mesh); disposeGroup(pr.mesh); projectiles.splice(i, 1); }
@@ -2436,6 +2470,24 @@ function flashMsg(t) {
 }
 
 let hurtFx = 0;
+
+/* MULTIJUGADOR: punto unico de entrada para el dano que reparten los enemigos.
+   Si el enemigo estaba persiguiendo al jugador remoto (isRemote), el dano se
+   aplica sobre RP (la simulacion del jugador 2 que vive en net.js) en vez de
+   sobre P. Sin isRemote, o sin partida online, el comportamiento es identico
+   al original: todo el dano cae sobre P. hurtPlayer() en si no cambia nada. */
+function hurtEitherPlayer(d, isRemote) {
+  if (isRemote && typeof RP !== 'undefined') { hurtRemotePlayer(d); return; }
+  hurtPlayer(d);
+}
+function hurtRemotePlayer(d) {
+  if (!RP.alive || RP.iframes > 0 || CFG.god) return;
+  const dmg = CFG.oneShot ? 9999 : d * CFG.enemyDmg;
+  if (dmg <= 0) return;
+  RP.hp -= dmg; RP.iframes = 0.25;
+  if (RP.hp <= 0) { RP.hp = 0; RP.alive = false; if (typeof netUpdateRemoteMesh === 'function') netUpdateRemoteMesh(RP.pos, RP.yaw, false); }
+}
+
 function hurtPlayer(d) {
   if (!P.alive || P.iframes > 0 || CFG.god) return;
   const dmg = CFG.oneShot ? 9999 : d * CFG.enemyDmg;
@@ -2715,7 +2767,8 @@ function updatePlayer(dt) {
   if (!CFG.infStamina) P.stamina = Math.min(P.maxStamina, P.stamina + regen * dt);
   else P.stamina = P.maxStamina;
 
-  checkLava();
+  if (!(typeof netIsClient === 'function' && netIsClient())) checkLava();
+  else if (typeof netClientLavaFx === 'function') netClientLavaFx();
   if (P.pos.y < -60) { P.pos.copy(world.spawn); P.vel.set(0, 0, 0); }
 }
 
@@ -2752,7 +2805,11 @@ function fire() {
     hits.sort((a, b) => a.t - b.t);
     if (w.pierce) for (const h of hits) { damageEnemy(h.e, w.dmg); hitAny = true; }
     else if (hits.length) { damageEnemy(hits[0].e, w.dmg); hitAny = true; }
-    const endT = hitAny && !w.pierce ? hits[0].t : Math.min(wallT, w.range);
+    let hitPlayerT = null;
+    if (!hitAny && MODE && MODE.rivals && typeof netIsHost === 'function' && netIsHost() && typeof netVersusHostCheckHit === 'function') {
+      if (netVersusHostCheckHit(false, origin, dir, Math.min(wallT, w.range), w.dmg)) { hitAny = true; hitPlayerT = origin.distanceTo(RP.pos); }
+    }
+    const endT = hitAny ? (hitPlayerT != null ? hitPlayerT : (!w.pierce ? hits[0].t : Math.min(wallT, w.range))) : Math.min(wallT, w.range);
     tracer(origin, dir, endT, w.color);
     if (!hitAny && wallT < w.range) {
       const hp = origin.clone().addScaledVector(dir, wallT - 0.1);
@@ -2805,22 +2862,36 @@ function frame(now) {
       S.time += dt;
       fireCd -= dt;
       const steps = Math.max(1, Math.ceil(dt / 0.016));
+      // PREDICCION LOCAL: el jugador (Host o Cliente) siempre mueve su propio cuerpo al instante,
+      // para que los controles respondan sin esperar a la red. En el Cliente esto es solo visual/
+      // sensacion de control: la posicion real que cuenta para el resto de jugadores es la que el
+      // Host calcula para su jugador remoto (RP) a partir del INPUT que el Cliente le manda por red.
       for (let i = 0; i < steps; i++) updatePlayer(dt / steps);
-      updateHook(dt);
-      parryT = Math.max(0, parryT - dt);
-      updateEnemies(dt); updateProjectiles(dt); updateLobs(dt); updateParticles(dt); updateTracers(dt);
-      updateFx(dt); updatePickups(dt); updateMusic(dt); updateLasers();
-      if (MODE.waves) updateWaves(dt);          // Versus no tiene oleadas de enemigos
-      fireUpdate(dt);
-      S.rankT = Math.max(0, S.rankT - dt * (6 + S.rank * 5));
-      {
-        let r = 0; for (let k = RANKS.length - 1; k >= 0; k--) if (S.rankT >= RANKS[k].need) { r = k; break; }
-        S.rank = r; S.mult = RANKS[r].m;
+
+      // AUTORIDAD DEL HOST: todo lo que decide el estado compartido de la partida (enemigos, oleadas,
+      // jefes, proyectiles enemigos, disparo con dano real) SOLO corre en Singleplayer o en el Host.
+      // El Cliente jamas ejecuta esto: recibe el resultado ya calculado por snapshot y lo pinta.
+      if (!(typeof netIsClient === 'function' && netIsClient())) {
+        updateHook(dt);
+        parryT = Math.max(0, parryT - dt);
+        updateEnemies(dt); updateProjectiles(dt); updateLobs(dt); updateParticles(dt); updateTracers(dt);
+        updateFx(dt); updatePickups(dt); updateLasers();
+        if (MODE.waves) updateWaves(dt);          // Versus no tiene oleadas de enemigos
+        fireUpdate(dt);
+        S.rankT = Math.max(0, S.rankT - dt * (6 + S.rank * 5));
+        {
+          let r = 0; for (let k = RANKS.length - 1; k >= 0; k--) if (S.rankT >= RANKS[k].need) { r = k; break; }
+          S.rank = r; S.mult = RANKS[r].m;
+        }
+        if (IN.fire) fire();
+        S.styleT -= dt; if (S.styleT <= 0) S.style = Math.max(0, S.style - dt * 3);
+      } else {
+        // El Cliente si necesita el disparo VISUAL (destello, sonido, tracer) para sentirse bien,
+        // pero el DANO real a los enemigos lo aplica el Host cuando procesa el mismo input por red
+        // (ver netHostSimulateRemotePlayer en net.js). Aqui solo el efecto, nunca damageEnemy().
+        if (IN.fire && fireCd <= 0 && typeof clientFireFx === 'function') clientFireFx();
       }
-
-      if (IN.fire) fire();
-
-      S.styleT -= dt; if (S.styleT <= 0) S.style = Math.max(0, S.style - dt * 3);
+      updateMusic(dt);
     } else {
       updateMusic(dt); // asegura que la musica de archivo se pause en pausa/menu
     }
@@ -2901,6 +2972,9 @@ function frame(now) {
   renderer.setRenderTarget(null);
   postMat.uniforms.tDiffuse.value = rt.texture;
   renderer.render(postScene, postCam);
+
+  // MULTIJUGADOR: fuera del try/catch de simulacion para que un fallo de red nunca detenga el juego.
+  if (typeof netFrameHook === 'function') { try { netFrameHook(dt); } catch (e) { if (CFG.debug) console.error('Error de red capturado:', e); } }
 }
 
 /* =====================================================================
@@ -3124,5 +3198,34 @@ resetPlayer();
 P.pos.set(0, 12, 0);
 requestAnimationFrame(frame);
 setInterval(() => { if (!S.running) { P.yaw += 0.004; P.pitch = -0.25; } }, 16);
+
+/* =====================================================================
+   MULTIJUGADOR: PUENTE HACIA net.js
+   -----------------------------------------------------------------------
+   Todo game.js vive dentro de un IIFE, asi que nada de esto es accesible
+   desde fuera por defecto. net.js necesita leer y modificar el estado del
+   juego (P, S, enemies...) y llamar a varias de sus funciones (movePlayer,
+   fire, startMode...) para poder implementar el Host/Cliente sin duplicar
+   ni un solo sistema del juego. Esta es la UNICA puerta que se abre hacia
+   fuera; no cambia nada del comportamiento cuando no hay multijugador.
+   ===================================================================== */
+window.__OVK = {
+  // estado
+  get P() { return P; }, get S() { return S; }, get MODE() { return MODE; }, set MODE(v) { MODE = v; }, MODES, CFG,
+  enemies, world, camera, scene, IN,
+  G, WALK, ACCEL, AIR_ACCEL, JUMP_V,
+  get bossActive() { return bossActive; }, set bossActive(v) { bossActive = v; },
+  WEAPONS, get wIdx() { return wIdx; }, get fireCd() { return fireCd; }, set fireCd(v) { fireCd = v; },
+  get gunKick() { return gunKick; }, set gunKick(v) { gunKick = v; },
+  ammoState, EYE,
+  // funciones
+  movePlayer, spawnEnemy, damageEnemy, killEnemyQuiet, updateEnemies,
+  rayWorld, rayEnemy, generateLevel, resetPlayer, startMode, newRun,
+  hurtEitherPlayer, hurtPlayer, die, checkLava,
+  setWeapon, updateWeaponHUD, setControls, showScreen, flashMsg,
+  triggerMuzzle, burst, tracer, impactRing, randomSeed, clamp, lerp,
+  haptic, sfx,
+  $, currentSeedGetter: () => currentSeedStr,
+};
 
 })();
