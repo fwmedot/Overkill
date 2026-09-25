@@ -1,0 +1,12 @@
+{
+  "name": "overkill-relay",
+  "version": "1.0.0",
+  "description": "Servidor relay de multijugador para Overkill (host/cliente). No simula el juego, solo reenvia mensajes entre el Host y el Cliente de cada partida.",
+  "main": "relay.js",
+  "scripts": {
+    "start": "node relay.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
